@@ -1,6 +1,3 @@
-/**
- * Company and macro news collection, deduplication, and ranking.
- */
 const News = (() => {
   const ALERT_KEYWORDS = Object.freeze([
     'upgrade',

@@ -1,6 +1,3 @@
-/**
- * Portfolio and watchlist sheet readers.
- */
 const Portfolio = (() => {
   const PORTFOLIO_HEADERS = ['Ticker', 'Company Name', 'Shares', 'Average Cost', 'Sector', 'Notes'];
   const WATCHLIST_HEADERS = ['Ticker', 'Company Name', 'Sector', 'Notes'];

@@ -1,12 +1,3 @@
-/**
- * Market data facade plus Finnhub provider implementation.
- *
- * Portfolio Intelligence only needs what the briefing renders: quotes,
- * profiles, headline metrics, and the next earnings date. Analyst price
- * targets, recommendation trends, and the cash-flow fields a DCF needs live
- * in the Deep Dive Screener project instead — this one never calls those
- * endpoints, which keeps a briefing run well inside the free tier.
- */
 const MarketData = (() => {
   function getProvider() {
     const provider = Config.all().marketDataProvider;

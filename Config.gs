@@ -1,23 +1,3 @@
-/**
- * Central configuration and Script Properties access.
- *
- * This is the PORTFOLIO INTELLIGENCE project: holdings, news, alerts, macro,
- * and the watchlist. Stock recommendations live in the separate Deep Dive
- * Screener project, which carries its own credentials and its own Finnhub
- * rate-limit budget.
- *
- * Required Script Properties:
- * - GEMINI_API_KEY
- * - FINNHUB_API_KEY
- * - TELEGRAM_BOT_TOKEN
- * - TELEGRAM_CHAT_ID
- *
- * Optional Script Properties:
- * - SPREADSHEET_ID: Defaults to the bound spreadsheet.
- * - GEMINI_MODEL: Defaults to gemini-2.5-flash.
- * - MARKET_DATA_PROVIDER: Defaults to FINNHUB.
- * - REPORT_TIMEZONE: Defaults to the script timezone.
- */
 const Config = (() => {
   const PROPERTIES = PropertiesService.getScriptProperties();
 

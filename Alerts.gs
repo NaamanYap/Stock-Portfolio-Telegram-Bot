@@ -1,6 +1,3 @@
-/**
- * Deterministic alert detection independent from the AI summary.
- */
 const Alerts = (() => {
   function buildAlerts(enrichedHoldings, newsByTicker) {
     return enrichedHoldings.reduce((alerts, holding) => {

@@ -1,6 +1,3 @@
-/**
- * Sheet-backed operational logging.
- */
 const AppLogger = (() => {
   const HEADERS = [
     'Timestamp',

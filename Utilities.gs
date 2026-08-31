@@ -1,6 +1,3 @@
-/**
- * Shared utilities for sheet parsing, HTTP calls, caching, dates, and formatting.
- */
 const Utils = (() => {
   function normalizeTicker(ticker) {
     return String(ticker || '').trim().toUpperCase();

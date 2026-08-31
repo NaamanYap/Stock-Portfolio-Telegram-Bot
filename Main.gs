@@ -1,11 +1,3 @@
-/**
- * Public entry points for Portfolio Intelligence Bot.
- *
- * Holdings, news, alerts, company updates, macro, risks, opportunities, and
- * the watchlist. Stock recommendations are a separate project (Deep Dive
- * Screener) with its own credentials, its own Telegram bot, and its own
- * Finnhub rate-limit budget.
- */
 function runDailyPortfolioIntelligence() {
   AppLogger.startRun();
   try {

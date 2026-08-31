@@ -1,10 +1,3 @@
-/**
- * Gemini report generation wrapper.
- *
- * Portfolio Intelligence only. Stock recommendations - and the whole
- * deep-dive schema, prompt, and screen-aware instruction set - live in the
- * separate Deep Dive Screener project.
- */
 const Gemini = (() => {
   const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 

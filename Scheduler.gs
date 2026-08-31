@@ -1,6 +1,3 @@
-/**
- * Trigger installation and maintenance.
- */
 const Scheduler = (() => {
   function installWeekdayTrigger() {
     deleteTriggers('runDailyPortfolioIntelligence');

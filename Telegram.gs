@@ -1,8 +1,3 @@
-/**
- * Telegram rendering for the Portfolio Intelligence briefing.
- * Stock recommendations are rendered by the Deep Dive Screener project,
- * which posts to its own bot.
- */
 const Telegram = (() => {
   const FORMAT = Object.freeze({
     maxMessageLength: 3900,
