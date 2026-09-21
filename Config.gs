@@ -11,7 +11,8 @@ const Config = (() => {
   const SHEETS = Object.freeze({
     portfolio: 'Portfolio',
     watchlist: 'Watchlist',
-    logs: 'Logs'
+    logs: 'Logs',
+    history: 'Portfolio History'
   });
 
   const DEFAULTS = Object.freeze({
@@ -34,7 +35,22 @@ const Config = (() => {
     finnhubMinIntervalMs: 1100,
     alertMovePercent: 5,
     earningsWindowDays: 7,
-    unusualVolumeRatio: 2
+    unusualVolumeRatio: 2,
+    // Every value in the Mini App and the briefing's portfolio totals is
+    // converted into this currency. Holdings keep their own currency in the
+    // sheet; only the totals are converted.
+    baseCurrency: 'USD',
+    // How long a Mini App link stays valid. The daily run re-issues the chat's
+    // menu button with a fresh link, so this only needs to outlast a few
+    // missed runs.
+    miniAppLinkDays: 30,
+    // A Mini App "refresh" within this window returns the stored snapshot
+    // instead of re-pricing everything, so hammering the button can't burn
+    // through the Finnhub quota.
+    snapshotMinRefreshSeconds: 120,
+    // The Logs sheet gets a row per event; without a cap it grows until the
+    // spreadsheet hits its cell limit.
+    maxLogRows: 3000
   });
 
   function get(key, fallback) {
@@ -77,12 +93,31 @@ const Config = (() => {
       finnhubMinIntervalMs: DEFAULTS.finnhubMinIntervalMs,
       alertMovePercent: DEFAULTS.alertMovePercent,
       earningsWindowDays: DEFAULTS.earningsWindowDays,
-      unusualVolumeRatio: DEFAULTS.unusualVolumeRatio
+      unusualVolumeRatio: DEFAULTS.unusualVolumeRatio,
+      baseCurrency: String(get('BASE_CURRENCY', DEFAULTS.baseCurrency)).trim().toUpperCase(),
+      miniAppLinkDays: Number(get('MINI_APP_LINK_DAYS', DEFAULTS.miniAppLinkDays)),
+      snapshotMinRefreshSeconds: DEFAULTS.snapshotMinRefreshSeconds,
+      maxLogRows: DEFAULTS.maxLogRows
     };
+  }
+
+  function set(key, value) {
+    PROPERTIES.setProperty(key, value);
+  }
+
+  function remove(key) {
+    PROPERTIES.deleteProperty(key);
+  }
+
+  function properties() {
+    return PROPERTIES;
   }
 
   return {
     get,
+    set,
+    remove,
+    properties,
     requireValue,
     validate,
     spreadsheet,

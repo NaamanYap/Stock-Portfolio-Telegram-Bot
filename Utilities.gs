@@ -12,16 +12,91 @@ const Utils = (() => {
   }
 
   function percent(value) {
+    if (value === null || value === undefined || value === '') return 'n/a';
     const number = Number(value);
     if (Number.isNaN(number)) return 'n/a';
     const prefix = number > 0 ? '+' : '';
     return `${prefix}${round(number, 2)}%`;
   }
 
-  function money(value) {
+  const CURRENCY_SYMBOLS = Object.freeze({
+    USD: '$', SGD: 'S$', HKD: 'HK$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', EUR: '€', GBP: '£',
+    JPY: '¥', CNY: 'CN¥', INR: '₹', KRW: '₩', ILS: '₪', CHF: 'CHF ', TWD: 'NT$', MYR: 'RM'
+  });
+
+  // Hand-rolled rather than Intl currency formatting: Apps Script's V8 ICU
+  // data is inconsistent across currencies, and this output goes into plain
+  // Telegram text where predictability matters more than locale rules.
+  function money(value, currency) {
+    if (value === null || value === undefined || value === '') return 'n/a';
     const number = Number(value);
     if (Number.isNaN(number)) return 'n/a';
-    return `$${number.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+    const code = String(currency || 'USD').toUpperCase();
+    const digits = code === 'JPY' || code === 'KRW' || code === 'IDR' || Math.abs(number) >= 100000 ? 0 : 2;
+    const fixed = Math.abs(number).toFixed(digits).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const symbol = CURRENCY_SYMBOLS[code];
+    const body = symbol ? `${symbol}${fixed}` : `${fixed} ${code}`;
+    return number < 0 ? `-${body}` : body;
+  }
+
+  /**
+   * Stores a JSON-serialisable value in Script Properties under `name`,
+   * split across `${name}_CHUNK_<i>` keys because one property holds at most
+   * 9KB. Leftover chunks from a previous, larger value are deleted.
+   */
+  function putChunked(name, value) {
+    const props = PropertiesService.getScriptProperties();
+    const countKey = `${name}_CHUNKS`;
+    const json = JSON.stringify(value);
+    const previousCount = Number(props.getProperty(countKey) || 0);
+    const chunkSize = 8000;
+    const chunks = {};
+    let count = 0;
+    for (let i = 0; i < json.length; i += chunkSize) {
+      chunks[`${name}_CHUNK_${count}`] = json.slice(i, i + chunkSize);
+      count += 1;
+    }
+    chunks[countKey] = String(count);
+    props.setProperties(chunks);
+    for (let i = count; i < previousCount; i += 1) {
+      props.deleteProperty(`${name}_CHUNK_${i}`);
+    }
+    return value;
+  }
+
+  function getChunked(name) {
+    const props = PropertiesService.getScriptProperties();
+    const count = Number(props.getProperty(`${name}_CHUNKS`) || 0);
+    if (!count) return null;
+    let json = '';
+    for (let i = 0; i < count; i += 1) {
+      json += props.getProperty(`${name}_CHUNK_${i}`) || '';
+    }
+    try {
+      return JSON.parse(json);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function signedMoney(value, currency) {
+    const number = Number(value || 0);
+    return `${number > 0 ? '+' : ''}${money(number, currency)}`;
+  }
+
+  /**
+   * Returns true (and records the time) if `key` wasn't used in the last
+   * `seconds`. Guards expensive entry points: any top-level function can be
+   * invoked through the web app via google.script.run, so they must be cheap
+   * to call repeatedly.
+   */
+  function cooldown(key, seconds) {
+    const props = PropertiesService.getScriptProperties();
+    const propertyKey = `COOLDOWN_${key}`;
+    const last = Number(props.getProperty(propertyKey) || 0);
+    if (Date.now() - last < seconds * 1000) return false;
+    props.setProperty(propertyKey, String(Date.now()));
+    return true;
   }
 
   function dateKey(date) {
@@ -167,6 +242,10 @@ const Utils = (() => {
     round,
     percent,
     money,
+    signedMoney,
+    cooldown,
+    putChunked,
+    getChunked,
     dateKey,
     daysBetween,
     parseHeaderRows,

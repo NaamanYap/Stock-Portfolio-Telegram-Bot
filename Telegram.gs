@@ -3,6 +3,7 @@ const Telegram = (() => {
     maxMessageLength: 3900,
     maxTopBulls: 5,
     maxTopBears: 5,
+    maxAlerts: 10,
     separator: '───────────────────────',
     headerSeparator: '═══════════════════════════════',
     bullBearSeparator: '───────────────────',
@@ -11,6 +12,8 @@ const Telegram = (() => {
 
   const HEADINGS = Object.freeze({
     title: '📈 Portfolio Update',
+    portfolio: '💼 Portfolio',
+    alerts: '🚨 Alerts',
     topBullsBears: '📰 My Holdings: Top 5 Bulls & Top 5 Bears',
     macroSnapshot: '🌍 Macro Snapshot',
     risks: "⚠️ Today's Risks",
@@ -18,38 +21,94 @@ const Telegram = (() => {
     watchList: '👀 Watchlist'
   });
 
-  function sendDailyBriefing(report) {
+  /**
+   * context (optional): { snapshot, alerts } - rendered deterministically
+   * above the AI sections, so the portfolio numbers never depend on the model.
+   */
+  function sendDailyBriefing(report, context) {
     const dateLabel = report.date || Utilities.formatDate(new Date(), Config.all().reportTimezone || 'UTC', 'dd MMMM yyyy');
-    const message = renderText(report, dateLabel);
-    splitMessage(message).forEach((part) => sendMessage(part));
+    const message = renderText(report, dateLabel, context || {});
+    const parts = splitMessage(message);
+    const button = Utils.safeCall('Mini App button', null, () => miniAppKeyboard());
+    parts.forEach((part, index) => {
+      const isLast = index === parts.length - 1;
+      sendMessage(part, isLast && button ? { reply_markup: button } : {});
+    });
   }
 
-  function sendMessage(text) {
+  /**
+   * Calls a Bot API method with a JSON body. Retries once on 429 using the
+   * retry_after Telegram supplies, since a multi-part briefing can trip the
+   * per-chat flood limit.
+   */
+  function call(method, payload) {
     const token = Config.requireValue('TELEGRAM_BOT_TOKEN');
-    const chatId = Config.requireValue('TELEGRAM_CHAT_ID');
-    const url = `https://api.telegram.org/bot${encodeURIComponent(token)}/sendMessage`;
-
-    AppLogger.incrementApi('Telegram');
-    const response = UrlFetchApp.fetch(url, {
-      method: 'post',
-      muteHttpExceptions: true,
-      payload: {
-        chat_id: chatId,
-        text,
-        disable_web_page_preview: true
+    const url = `https://api.telegram.org/bot${encodeURIComponent(token)}/${method}`;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      AppLogger.incrementApi('Telegram');
+      const response = UrlFetchApp.fetch(url, {
+        method: 'post',
+        muteHttpExceptions: true,
+        contentType: 'application/json',
+        payload: JSON.stringify(payload || {})
+      });
+      const status = response.getResponseCode();
+      const body = response.getContentText();
+      if (status >= 200 && status < 300) {
+        return JSON.parse(body).result;
       }
-    });
+      if (status === 429 && attempt < 2) {
+        const retryAfter = Utils.safeCall('Telegram retry_after', 1, () => JSON.parse(body).parameters.retry_after) || 1;
+        Utilities.sleep(Math.min(Number(retryAfter), 30) * 1000);
+        continue;
+      }
+      throw new Error(`Telegram ${method} HTTP ${status}: ${body.slice(0, 1000)}`);
+    }
+    return null;
+  }
 
-    const status = response.getResponseCode();
-    const body = response.getContentText();
-    if (status < 200 || status >= 300) {
-      throw new Error(`Telegram HTTP ${status}: ${body.slice(0, 1000)}`);
+  function sendMessage(text, options, chatId) {
+    return call('sendMessage', Object.assign({
+      chat_id: chatId || Config.requireValue('TELEGRAM_CHAT_ID'),
+      text,
+      disable_web_page_preview: true
+    }, options || {}));
+  }
+
+  /**
+   * Inline button that opens the Mini App. Telegram only allows web_app
+   * buttons in private chats, so group/channel chat IDs (negative numbers)
+   * get a plain link button that opens in the browser instead.
+   */
+  function miniAppKeyboard(label) {
+    if (!MiniApp.isConfigured()) return null;
+    const text = label || '📊 Open portfolio';
+    const url = MiniApp.link();
+    const chatId = String(Config.requireValue('TELEGRAM_CHAT_ID'));
+    const button = isPrivateChat(chatId) ? { text, web_app: { url } } : { text, url };
+    return { inline_keyboard: [[button]] };
+  }
+
+  function isPrivateChat(chatId) {
+    return !/^-/.test(String(chatId));
+  }
+
+  /** Best-effort: tells the chat a scheduled run failed instead of staying silent. */
+  function notifyFailure(error) {
+    try {
+      const message = error && error.message ? error.message : String(error);
+      sendMessage(`⚠️ Portfolio briefing failed\n\n${Utils.truncate(message, 600)}\n\nDetails are in the Logs sheet.`);
+    } catch (ignored) {
+      // Telegram itself may be what failed; the Logs sheet already has it.
     }
   }
 
-  function renderText(report, dateLabel) {
+  function renderText(report, dateLabel, context) {
+    const ctx = context || {};
     const sections = [
       renderHeader(dateLabel),
+      renderPortfolioSummary(ctx.snapshot),
+      renderAlerts(ctx.alerts),
       renderTopBullsBears(report),
       renderWatchList(report),
       renderMacroSnapshot(report),
@@ -67,10 +126,41 @@ const Telegram = (() => {
   }
 
 
-  function formatPercent(value) {
-    const num = parseFloat(String(value || '').replace('%', ''));
-    if (isNaN(num)) return value;
-    return `${num.toFixed(2)}%`;
+  function renderPortfolioSummary(snapshot) {
+    if (!snapshot || !snapshot.totals || !snapshot.totals.value) return '';
+    const ccy = snapshot.baseCurrency;
+    const t = snapshot.totals;
+    const lines = [
+      HEADINGS.portfolio,
+      `Total value: ${Utils.money(t.value, ccy)}`,
+      `Today: ${Utils.signedMoney(t.dayChange, ccy)} (${Utils.percent(t.dayChangePercent)})`
+    ];
+    if (t.unrealizedGain !== null && t.unrealizedGain !== undefined) {
+      lines.push(`Unrealised P/L: ${Utils.signedMoney(t.unrealizedGain, ccy)} (${Utils.percent(t.unrealizedGainPercent)})`);
+    }
+    if (snapshot.byMarket && snapshot.byMarket.length > 1) {
+      lines.push('');
+      snapshot.byMarket.forEach((m) => {
+        lines.push(`${FORMAT.bullet} ${m.name}: ${Utils.money(m.value, ccy)} · ${Utils.round(m.weight * 100, 1)}% · ${Utils.percent(m.dayChangePercent)} today`);
+      });
+    }
+    if (t.unpriced) {
+      lines.push('', `⚠️ ${t.unpriced} holding(s) could not be priced and are excluded.`);
+    }
+    return lines.join('\n');
+  }
+
+  function renderAlerts(alertsByTicker) {
+    if (!alertsByTicker) return '';
+    const important = ['Price move', 'Upcoming earnings', 'Unusual volume', 'Analyst upgrade', 'Analyst downgrade', 'Dividend announcement'];
+    const lines = [];
+    Object.keys(alertsByTicker).forEach((ticker) => {
+      alertsByTicker[ticker]
+        .filter((alert) => important.indexOf(alert.type) !== -1)
+        .forEach((alert) => lines.push(`${FORMAT.bullet} ${alert.message}`));
+    });
+    if (!lines.length) return '';
+    return [HEADINGS.alerts].concat(lines.slice(0, FORMAT.maxAlerts)).join('\n');
   }
 
   function renderTopBullsBears(report) {
@@ -139,12 +229,7 @@ const Telegram = (() => {
       }
     };
 
-    addCategory('Oil', m.oil);
-    addCategory('Federal Reserve', m.fed);
-    addCategory('USD / Gold', m.forexGold);
-    addCategory('Technology', m.technology);
-    addCategory('Geopolitics', m.geopolitics);
-    addCategory('Markets', m.markets);
+    Briefing.MACRO_CATEGORIES.forEach((category) => addCategory(category.title, m[category.key]));
 
     return sections.length ? [HEADINGS.macroSnapshot].concat(sections).join('\n\n') : '';
   }
@@ -166,7 +251,17 @@ const Telegram = (() => {
   }
 
   function splitMessage(message) {
-    const lines = message.split('\n');
+    // Break any single line longer than the limit first, so no part can exceed it.
+    const lines = [];
+    message.split('\n').forEach((line) => {
+      if (!line.length) {
+        lines.push(line);
+        return;
+      }
+      for (let i = 0; i < line.length; i += FORMAT.maxMessageLength) {
+        lines.push(line.slice(i, i + FORMAT.maxMessageLength));
+      }
+    });
     const parts = [];
     let current = '';
 
@@ -186,6 +281,12 @@ const Telegram = (() => {
 
   return {
     sendDailyBriefing,
+    sendMessage,
+    call,
+    miniAppKeyboard,
+    isPrivateChat,
+    notifyFailure,
+    renderPortfolioSummary,
     renderText
   };
 })();
