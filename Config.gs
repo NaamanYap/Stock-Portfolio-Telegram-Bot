@@ -80,7 +80,17 @@ const Config = (() => {
       : SpreadsheetApp.getActiveSpreadsheet();
   }
 
+  // all() is hit several times per API call (throttle, fetchJson, retry,
+  // provider lookup), and each uncached read is a PropertiesService round
+  // trip. Resolved once per execution; set()/remove() clear it.
+  let resolved = null;
+
   function all() {
+    if (!resolved) resolved = resolve();
+    return resolved;
+  }
+
+  function resolve() {
     return {
       sheets: SHEETS,
       geminiModel: get('GEMINI_MODEL', DEFAULTS.geminiModel),
@@ -103,10 +113,12 @@ const Config = (() => {
 
   function set(key, value) {
     PROPERTIES.setProperty(key, value);
+    resolved = null;
   }
 
   function remove(key) {
     PROPERTIES.deleteProperty(key);
+    resolved = null;
   }
 
   function properties() {

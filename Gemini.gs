@@ -1,5 +1,7 @@
 const Gemini = (() => {
   const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+  // Time an attempt must have left before it's started.
+  const MIN_MS_PER_ATTEMPT = 90 * 1000;
 
   function generateDailyBriefing(payload) {
     const body = {
@@ -37,6 +39,10 @@ const Gemini = (() => {
     let delay = 2000;
 
     for (let i = 0; i < maxRetries; i++) {
+      // A generation can take a minute or more. Rather than start one the
+      // execution may be killed in the middle of, stop here and let the run
+      // resume in a fresh execution (see Utils.setDeadline).
+      Utils.checkDeadline(MIN_MS_PER_ATTEMPT);
       try {
         response = UrlFetchApp.fetch(url, {
           method: 'post',
@@ -62,8 +68,9 @@ const Gemini = (() => {
         if (i === maxRetries - 1 || !error.message.includes('Transient error')) {
           throw new Error(error.message.includes('Transient error') ? `Gemini HTTP ${status}: ${text.slice(0, 1000)}` : error);
         }
+        Utils.checkDeadline(delay + MIN_MS_PER_ATTEMPT);
         Utilities.sleep(delay);
-        delay *= 2; 
+        delay *= 2;
       }
     }
 

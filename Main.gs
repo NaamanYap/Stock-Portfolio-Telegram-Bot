@@ -1,3 +1,22 @@
+/*
+ * Execution time budget. Apps Script kills a run at 6 minutes, and a briefing
+ * makes ~5 Finnhub calls per holding paced at ~1/second, plus news and a
+ * Gemini call - a large portfolio doesn't fit. So the run works against a
+ * deadline: when time runs short it stops cleanly and schedules
+ * continueDailyBriefing, which starts over in a fresh execution. Everything
+ * already fetched is served from cache (and cache hits aren't paced), so the
+ * continuation gets through the data in seconds and picks up where the last
+ * one stopped.
+ */
+const RUN_LIMIT_MS = 6 * 60 * 1000;
+// Left over after the deadline for logging and scheduling the continuation.
+const RUN_SAFETY_MS = 40 * 1000;
+// Data fetching stops this long before the deadline, keeping room for Gemini
+// and Telegram delivery in the same execution.
+const BRIEFING_RESERVE_MS = 150 * 1000;
+const MAX_CONTINUATIONS = 3;
+const CONTINUATION_KEY = 'BRIEFING_CONTINUATION';
+
 function runDailyPortfolioIntelligence() {
   // Any top-level function can be called through the web app, so the one that
   // spends Gemini tokens refuses to run twice within a few minutes.
@@ -5,6 +24,30 @@ function runDailyPortfolioIntelligence() {
     Logger.log('Skipped: a briefing ran less than 5 minutes ago.');
     return;
   }
+  // A fresh run supersedes any continuation still waiting from an earlier one.
+  Scheduler.deleteTriggers('continueDailyBriefing');
+  Config.remove(CONTINUATION_KEY);
+  runBriefing_(0);
+}
+
+/**
+ * Trigger target scheduled by a briefing that ran out of time. Only runs when
+ * that briefing left a marker, so calling it through the web app can't be
+ * used to get around runDailyPortfolioIntelligence's cooldown.
+ */
+function continueDailyBriefing() {
+  Scheduler.deleteTriggers('continueDailyBriefing');
+  const attempt = Number(Config.get(CONTINUATION_KEY) || 0);
+  Config.remove(CONTINUATION_KEY);
+  if (!attempt) {
+    Logger.log('Skipped: no briefing is waiting to continue.');
+    return;
+  }
+  runBriefing_(attempt);
+}
+
+function runBriefing_(continuation) {
+  const deadline = Date.now() + RUN_LIMIT_MS - RUN_SAFETY_MS;
   AppLogger.startRun();
   try {
     Config.validate();
@@ -15,6 +58,7 @@ function runDailyPortfolioIntelligence() {
       throw new Error('Portfolio sheet has no holdings.');
     }
 
+    Utils.setDeadline(deadline - BRIEFING_RESERVE_MS);
     const enrichedHoldings = MarketData.enrichAll(holdings);
     // The briefing has already priced everything, so saving the snapshot here
     // is free, and the Mini App opens on the same numbers the message shows.
@@ -27,7 +71,11 @@ function runDailyPortfolioIntelligence() {
     const reportInput = buildReportInput_(
       enrichedHoldings, watchlist, companyNews, watchlistNews, macroNews, alerts, snapshot
     );
+    Utils.setDeadline(deadline);
     const report = reconcileWithMarketData_(Gemini.generateDailyBriefing(reportInput), enrichedHoldings);
+    // From here on nothing may stop halfway: a continuation would send the
+    // Telegram messages a second time.
+    Utils.setDeadline(null);
     // Saved before sending, so the Mini App's Briefing tab has it even if
     // Telegram delivery fails.
     Utils.safeCall('Briefing save', null, () => Briefing.save(report, { watchlist, watchlistNews }));
@@ -40,9 +88,17 @@ function runDailyPortfolioIntelligence() {
       holdings: enrichedHoldings.length,
       watchlist: watchlist.length,
       totalValue: Utils.round(snapshot.totals.value, 2),
-      baseCurrency: snapshot.baseCurrency
+      baseCurrency: snapshot.baseCurrency,
+      continuations: continuation
     });
   } catch (error) {
+    Utils.setDeadline(null);
+    if (Utils.isOutOfTime(error) && continuation < MAX_CONTINUATIONS) {
+      Config.set(CONTINUATION_KEY, String(continuation + 1));
+      Scheduler.scheduleOnce('continueDailyBriefing', 60 * 1000);
+      AppLogger.info('Daily briefing continues in a new execution', { continuation: continuation + 1 });
+      return;
+    }
     AppLogger.error('Daily briefing failed', error);
     Telegram.notifyFailure(error);
     throw error;

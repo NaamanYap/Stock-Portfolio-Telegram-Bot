@@ -139,20 +139,34 @@ const Utils = (() => {
   // attempt rather than burning retry attempts and sleep time on it.
   const RETRYABLE_HTTP_STATUSES = [429, 500, 502, 503, 504];
 
+  /**
+   * options, besides UrlFetchApp's own:
+   * - skipCache: don't read or write the response cache (for payloads known
+   *   to be too large for it - cache the extracted value with cached() instead)
+   * - beforeNetwork: called only when a real request is about to go out, not
+   *   on a cache hit - where rate-limit pacing and call counting belong
+   */
   function fetchJson(url, options) {
     const settings = Config.all();
+    const opts = options || {};
     const requestOptions = Object.assign({
       method: 'get',
       muteHttpExceptions: true,
       contentType: 'application/json'
-    }, options || {});
+    }, opts);
+    delete requestOptions.skipCache;
+    delete requestOptions.beforeNetwork;
+    const useCache = !opts.skipCache && requestOptions.method.toLowerCase() === 'get';
     const cacheKey = `http:${Utilities.base64EncodeWebSafe(url).slice(0, 220)}`;
     const cache = CacheService.getScriptCache();
 
-    if (!requestOptions.skipCache && requestOptions.method.toLowerCase() === 'get') {
+    if (useCache) {
       const cached = cache.get(cacheKey);
       if (cached) return JSON.parse(cached);
     }
+
+    checkDeadline();
+    if (opts.beforeNetwork) opts.beforeNetwork();
 
     // IMPORTANT: requestOptions sets muteHttpExceptions: true, so
     // UrlFetchApp.fetch() never throws for HTTP error statuses like 429/403 -
@@ -183,7 +197,7 @@ const Utils = (() => {
     }
 
     const parsed = body ? JSON.parse(body) : {};
-    if (!requestOptions.skipCache && requestOptions.method.toLowerCase() === 'get') {
+    if (useCache) {
       // Caching is an optimization, not a correctness requirement - a large
       // response (e.g. Finnhub's /stock/metric?metric=all, which returns
       // dozens of TTM/quarterly/annual fields and can exceed CacheService's
@@ -220,9 +234,67 @@ const Utils = (() => {
     try {
       return work();
     } catch (error) {
+      // Running out of time isn't this call's failure - the whole run has to
+      // stop and resume, so it must not be swallowed into a fallback value.
+      if (isOutOfTime(error)) throw error;
       AppLogger.error(label, error);
       return fallback;
     }
+  }
+
+  const memo = {};
+
+  /**
+   * Returns work()'s JSON-serialisable result, memoised in this execution and
+   * in CacheService for ttlSeconds (default Config cacheTtlSeconds). For
+   * values extracted from responses too large to cache raw. Failures aren't
+   * cached, and a failed cache write only costs the caching.
+   */
+  function cached(key, work, ttlSeconds) {
+    if (Object.prototype.hasOwnProperty.call(memo, key)) return memo[key];
+    const cache = CacheService.getScriptCache();
+    const hit = cache.get(key);
+    if (hit) {
+      memo[key] = JSON.parse(hit);
+      return memo[key];
+    }
+    const value = work();
+    memo[key] = value;
+    try {
+      cache.put(key, JSON.stringify(value), ttlSeconds || Config.all().cacheTtlSeconds);
+    } catch (cacheError) {
+      Logger.log(`[cached] Skipping cache write for ${key}: ${cacheError}`);
+    }
+    return value;
+  }
+
+  /**
+   * Execution deadline. Apps Script kills a run at 6 minutes with no chance to
+   * clean up, so long runs set a deadline and fetchJson refuses to start a
+   * request past it, throwing an OutOfTime error the run can catch and resume
+   * from. null (the default) means no deadline.
+   */
+  let deadline = null;
+
+  function setDeadline(timestampMs) {
+    deadline = timestampMs || null;
+  }
+
+  function msLeft() {
+    return deadline ? deadline - Date.now() : Infinity;
+  }
+
+  /** Throws OutOfTime unless at least neededMs remain before the deadline. */
+  function checkDeadline(neededMs) {
+    if (msLeft() < (neededMs || 0)) {
+      const error = new Error('Ran out of execution time');
+      error.name = 'OutOfTime';
+      throw error;
+    }
+  }
+
+  function isOutOfTime(error) {
+    return Boolean(error && error.name === 'OutOfTime');
   }
 
   // Finnhub takes its API key as a `token` query parameter, so any raw URL is a
@@ -253,6 +325,11 @@ const Utils = (() => {
     fetchJson,
     retry,
     safeCall,
+    cached,
+    setDeadline,
+    msLeft,
+    checkDeadline,
+    isOutOfTime,
     redactUrl,
     truncate
   };

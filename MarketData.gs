@@ -172,12 +172,10 @@ const FinnhubProvider = (() => {
     lastRequestTime = Date.now();
   }
 
-  // Note: this paces every call including ones served from fetchJson's cache
-  // (the cache check happens inside fetchJson, after this point). A deliberate
-  // simplicity trade-off - the delay on a cache hit is negligible next to the
-  // cost of a rate-limit outage.
-
-  function get(path, params) {
+  // Paces (and counts) only requests that actually go out: cache hits skip
+  // it. That matters when a briefing resumes in a new execution and replays
+  // a few hundred already-cached calls - pacing those would burn minutes.
+  function get(path, params, options) {
     const query = Object.keys(params || {})
       .concat('token')
       .map((key) => {
@@ -185,9 +183,12 @@ const FinnhubProvider = (() => {
         return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
       })
       .join('&');
-    throttle();
-    AppLogger.incrementApi('Finnhub');
-    return Utils.fetchJson(`${BASE_URL}${path}?${query}`);
+    return Utils.fetchJson(`${BASE_URL}${path}?${query}`, Object.assign({}, options, {
+      beforeNetwork: () => {
+        throttle();
+        AppLogger.incrementApi('Finnhub');
+      }
+    }));
   }
 
   function getQuote(ticker) {
@@ -215,21 +216,22 @@ const FinnhubProvider = (() => {
     };
   }
 
+  // metric=all returns hundreds of fields and overflows CacheService's
+  // 100KB-per-value limit, so the raw response isn't cached - just the few
+  // fields extracted from it.
   function getMetrics(ticker) {
-    const data = get('/stock/metric', { symbol: ticker, metric: 'all' });
-    const metric = data.metric || {};
-
-    return {
-      marketCap: metric.marketCapitalization ? metric.marketCapitalization * 1000000 : null,
-      peRatio: metric.peNormalizedAnnual || metric.peTTM || null,
-      week52High: metric['52WeekHigh'] || null,
-      week52Low: metric['52WeekLow'] || null,
-      averageVolume: metric['10DayAverageTradingVolume'] || metric['3MonthAverageTradingVolume'] || null,
-      volume: metric.volume || null,
-      // Raw passthrough so you can inspect the full untouched Finnhub payload
-      // from Logger output if a field ever looks off.
-      _rawMetric: metric
-    };
+    return Utils.cached(`finnhub:metrics:${ticker}`, () => {
+      const data = get('/stock/metric', { symbol: ticker, metric: 'all' }, { skipCache: true });
+      const metric = data.metric || {};
+      return {
+        marketCap: metric.marketCapitalization ? metric.marketCapitalization * 1000000 : null,
+        peRatio: metric.peNormalizedAnnual || metric.peTTM || null,
+        week52High: metric['52WeekHigh'] || null,
+        week52Low: metric['52WeekLow'] || null,
+        averageVolume: metric['10DayAverageTradingVolume'] || metric['3MonthAverageTradingVolume'] || null,
+        volume: metric.volume || null
+      };
+    });
   }
 
   function getNextEarningsDate(ticker) {

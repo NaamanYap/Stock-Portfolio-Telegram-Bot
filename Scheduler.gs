@@ -41,6 +41,11 @@ const Scheduler = (() => {
     AppLogger.info('Triggers installed', 'Hourly portfolio snapshot trigger created.');
   }
 
+  /** One-off trigger; the target deletes its own trigger when it runs. */
+  function scheduleOnce(functionName, delayMs) {
+    ScriptApp.newTrigger(functionName).timeBased().after(delayMs).create();
+  }
+
   function deleteTriggers(functionName) {
     ScriptApp.getProjectTriggers().forEach((trigger) => {
       if (!functionName || trigger.getHandlerFunction() === functionName) {
@@ -52,6 +57,7 @@ const Scheduler = (() => {
   return {
     installWeekdayTrigger,
     installSnapshotTrigger,
+    scheduleOnce,
     deleteTriggers
   };
 })();

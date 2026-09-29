@@ -22,9 +22,13 @@ const News = (() => {
     'US dollar macro markets geopolitics'
   ]);
 
+  // Cached after ranking: a busy ticker's raw feed is too large to cache, and
+  // without this a ticker that is both held and watched is fetched twice.
   function getCompanyNews(ticker, companyName) {
-    const articles = Utils.safeCall(`${ticker} news`, [], () => FinnhubNewsProvider.getCompanyNews(ticker));
-    return rankAndFilter(articles, ticker, companyName).slice(0, Config.all().maxNewsPerTicker);
+    return Utils.safeCall(`${ticker} news`, [], () => Utils.cached(`news:company:${ticker}`, () => (
+      rankAndFilter(FinnhubNewsProvider.getCompanyNews(ticker), ticker, companyName)
+        .slice(0, Config.all().maxNewsPerTicker)
+    )));
   }
 
   // Finnhub's company-news endpoint only covers North American listings, and
@@ -145,8 +149,8 @@ const FinnhubNewsProvider = (() => {
   // Routed through FinnhubProvider.request so news calls share its rate-limit
   // pacing. Previously news had its own unthrottled client, which could burst
   // past the 60/minute cap straight after the quote fetches.
-  function get(path, params) {
-    return FinnhubProvider.request(path, params);
+  function get(path, params, options) {
+    return FinnhubProvider.request(path, params, options);
   }
 
   function getCompanyNews(ticker) {
@@ -156,7 +160,7 @@ const FinnhubNewsProvider = (() => {
       symbol: ticker,
       from: Utils.dateKey(yesterday),
       to: Utils.dateKey(today)
-    });
+    }, { skipCache: true });
   }
 
   // The general feed is the same for every macro query - fetch it once per run

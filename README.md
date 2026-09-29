@@ -163,7 +163,12 @@ Created automatically:
 
 - `installPortfolioIntelligenceBot()` — validates properties, seeds example
   sheets if empty, installs weekday 8 AM triggers.
-- `runDailyPortfolioIntelligence()` — runs the briefing and sends it.
+- `runDailyPortfolioIntelligence()` — runs the briefing and sends it. Apps
+  Script stops any execution at 6 minutes, so when a large portfolio won't
+  fit, the run stops cleanly and resumes a minute later in a new execution
+  (`continueDailyBriefing`, up to 3 times). Data fetched before the stop is
+  served from cache, so nothing is fetched twice. The Logs sheet shows
+  "Daily briefing continues in a new execution" when this happens.
 - `seedExampleSpreadsheet()` — adds example rows if the sheets are empty.
 - `installTelegramBot()` — registers the webhook, command menu and Mini App
   menu button. Run after setting `WEBAPP_URL`.
