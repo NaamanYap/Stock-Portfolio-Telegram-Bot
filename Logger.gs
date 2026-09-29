@@ -62,6 +62,17 @@ const AppLogger = (() => {
       runContext.tokensUsed,
       successfulRunDate || ''
     ]);
+    trim(sheet);
+  }
+
+  // Deletes the oldest rows once the sheet is well past the cap. The slack
+  // means the delete runs once every few hundred writes, not on every write.
+  function trim(sheet) {
+    const maxRows = Config.all().maxLogRows;
+    const dataRows = sheet.getLastRow() - 1;
+    if (dataRows > maxRows + 500) {
+      sheet.deleteRows(2, dataRows - maxRows);
+    }
   }
 
   function getLogSheet() {

@@ -86,6 +86,8 @@ const Gemini = (() => {
       'You are Portfolio Intelligence Bot, a cautious investment research assistant.',
       'Write concise, factual, non-hype bullet points for a personal portfolio briefing.',
       'Use the provided market, portfolio, news, alert, and macro inputs to formulate the brief.',
+      'Holdings span several markets and asset classes: each holding\'s price and positionValue are in its own currency field; portfolioStats and positionValueBase are in portfolioStats.baseCurrency. Never add values across currencies yourself.',
+      'Only write companyUpdates for listed stocks and ETFs in holdings; skip cash. Crypto may be included when it moved materially.',
       'Avoid long paragraphs, repeated facts, generic filler, and empty-section wording.',
 
       'For each companyUpdate item, structure the response explicitly:',

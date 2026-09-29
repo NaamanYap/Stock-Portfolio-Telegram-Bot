@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<script src="https://telegram.org/js/telegram-web-app.js" async></script>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --ring: rgba(11, 11, 11, 0.10);
+    --wash: rgba(11, 11, 11, 0.04);
+    --up: #006300;
+    --down: #d03b3b;
+    --accent: #2a78d6;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+    --other: #898781;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+      --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+      --ring: rgba(255, 255, 255, 0.10); --wash: rgba(255, 255, 255, 0.06);
+      --up: #0ca30c; --down: #e66767; --accent: #3987e5;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+    --ring: rgba(255, 255, 255, 0.10); --wash: rgba(255, 255, 255, 0.06);
+    --up: #0ca30c; --down: #e66767; --accent: #3987e5;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 16px 16px 40px; }
+  .card {
+    background: var(--surface);
+    border-radius: 16px;
+    box-shadow: 0 0 0 1px var(--ring);
+    padding: 16px;
+    margin-top: 12px;
+  }
+  h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0; letter-spacing: 0.01em; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .muted { color: var(--muted); }
+  .num { font-variant-numeric: tabular-nums; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  button { font: inherit; color: inherit; }
+
+  /* Hero */
+  .hero { padding: 20px 16px 16px; }
+  .hero-label { font-size: 13px; color: var(--ink-2); }
+  .hero-value { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 4px 0 6px; overflow-wrap: anywhere; }
+  .deltas { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; }
+  .delta-label { color: var(--muted); margin-left: 4px; }
+  .meta { margin-top: 14px; font-size: 12px; color: var(--muted); }
+  .refresh {
+    border: 0; background: var(--wash); border-radius: 999px; padding: 6px 12px;
+    font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .refresh[disabled] { opacity: 0.6; cursor: default; }
+  .refresh svg { width: 14px; height: 14px; }
+  .spin svg { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Segmented controls */
+  .seg { display: inline-flex; background: var(--wash); border-radius: 10px; padding: 2px; }
+  .seg button {
+    border: 0; background: transparent; padding: 5px 10px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; color: var(--ink-2); cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--ring); }
+
+  /* History chart */
+  .chart-summary { font-size: 13px; margin: 10px 0 4px; }
+  .chart-wrap { position: relative; height: 180px; margin-top: 4px; touch-action: pan-y; }
+  .chart-wrap svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .tooltip {
+    position: absolute; top: 0; pointer-events: none; background: var(--surface);
+    box-shadow: 0 0 0 1px var(--ring), 0 4px 16px rgba(0, 0, 0, 0.12);
+    border-radius: 8px; padding: 6px 8px; font-size: 12px; white-space: nowrap;
+    transform: translateX(-50%); display: none; z-index: 2;
+  }
+  .tooltip b { display: block; font-size: 13px; }
+  .empty { padding: 28px 8px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  /* Allocation */
+  .stack { display: flex; gap: 2px; height: 14px; margin: 16px 0 8px; }
+  .stack span { display: block; height: 100%; min-width: 3px; }
+  .stack span:first-child { border-radius: 4px 0 0 4px; }
+  .stack span:last-child { border-radius: 0 4px 4px 0; }
+  .stack span:only-child { border-radius: 4px; }
+  .alloc-row {
+    display: grid; grid-template-columns: 10px 1fr auto auto; gap: 10px; align-items: center;
+    width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer;
+    padding: 10px 6px; margin: 0 -6px; border-radius: 10px; width: calc(100% + 12px);
+  }
+  .alloc-row:hover, .alloc-row[aria-pressed="true"] { background: var(--wash); }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; }
+  .alloc-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .alloc-name small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .alloc-value { text-align: right; }
+  .alloc-value small { display: block; color: var(--muted); font-size: 12px; }
+  .alloc-change { font-size: 13px; text-align: right; min-width: 64px; }
+
+  /* Holdings */
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer;
+    background: var(--wash); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600;
+  }
+  .holding { border-top: 1px solid var(--grid); }
+  .holding:first-child { border-top: 0; }
+  .holding-main {
+    display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
+    width: 100%; padding: 12px 0; border: 0; background: transparent; text-align: left; cursor: pointer;
+  }
+  .ticker { font-weight: 700; }
+  .holding-sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .holding-right { text-align: right; }
+  .holding-right .change { font-size: 13px; }
+  .details {
+    display: none; grid-template-columns: 1fr 1fr; gap: 8px 16px; padding: 0 0 14px; font-size: 13px;
+  }
+  .holding.open .details { display: grid; }
+  .details dt { color: var(--muted); font-size: 12px; }
+  .details dd { margin: 0; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ink-2); background: var(--wash); border-radius: 4px; padding: 1px 5px; margin-left: 6px; vertical-align: 2px;
+  }
+
+  /* View tabs */
+  .tabs { display: flex; margin-top: 12px; }
+  .tabs .seg { display: flex; width: 100%; }
+  .tabs .seg button { flex: 1; padding: 8px 10px; font-size: 13px; }
+
+  /* Briefing */
+  .briefing-meta { font-size: 12px; color: var(--muted); margin: 14px 4px 0; }
+  .watch { border-top: 1px solid var(--grid); padding: 14px 0; }
+  .watch:first-of-type { border-top: 0; }
+  .watch p { margin: 6px 0 0; font-size: 14px; }
+  .watch .outlook { color: var(--ink-2); }
+  .watch-name { font-size: 12px; color: var(--muted); margin-left: 6px; }
+  .sentiment { font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .sentiment.neutral { color: var(--ink-2); }
+  .news { list-style: none; margin: 10px 0 0; padding: 0; }
+  .news li { padding: 6px 0 0; font-size: 13px; }
+  .news a { color: var(--accent); text-decoration: none; }
+  .news a:hover { text-decoration: underline; }
+  .news .muted { display: block; font-size: 12px; }
+  .bullets { margin: 10px 0 0; padding-left: 18px; font-size: 14px; }
+  .bullets li { margin-top: 6px; }
+  .bullets li::marker { color: var(--muted); }
+  .macro-group + .macro-group { margin-top: 14px; }
+  h3 { font-size: 13px; font-weight: 600; margin: 12px 0 0; }
+
+  /* Loading & errors */
+  .skeleton { background: var(--wash); border-radius: 8px; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.5; } }
+  .error { color: var(--down); font-size: 14px; }
+  .footnote { font-size: 12px; color: var(--muted); text-align: center; margin-top: 16px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<main id="app">
+  <section class="card hero" aria-busy="true">
+    <div class="skeleton" style="width: 40%; height: 14px"></div>
+    <div class="skeleton" style="width: 70%; height: 36px; margin: 10px 0"></div>
+    <div class="skeleton" style="width: 55%; height: 14px"></div>
+  </section>
+  <section class="card"><div class="skeleton" style="height: 180px"></div></section>
+  <section class="card"><div class="skeleton" style="height: 140px"></div></section>
+</main>
+
+<script>
+(function () {
+  // Safe to print unescaped: doGet only renders this page for a token that
+  // passed signature checks, and tokens are digits + base64url characters.
+  var TOKEN = <?!= JSON.stringify(token) ?>;
+  var SERIES = ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6', '--s7', '--s8'];
+  var MAX_GROUPS = 7; // 7 hues + a gray "Other" keeps every slot in the fixed palette
+  var DIMENSION = { key: 'bySector', field: 'sectorGroup' };
+  var RANGES = [
+    { key: '1M', days: 31 }, { key: '3M', days: 92 }, { key: '1Y', days: 366 }, { key: 'All', days: Infinity }
+  ];
+  var VIEWS = [{ key: 'portfolio', label: 'Portfolio' }, { key: 'briefing', label: 'Briefing' }];
+  var SORTS = [
+    { key: 'value', label: 'Value' }, { key: 'today', label: 'Today' }, { key: 'pl', label: 'P/L' }
+  ];
+
+  var state = {
+    data: null,
+    range: loadPref('range', '3M'),
+    sort: loadPref('sort', 'value'),
+    view: loadPref('view', 'portfolio'),
+    filter: null,
+    open: {},
+    refreshing: false
+  };
+
+  // ---- Telegram integration (best effort: absent in a normal browser) ----
+  function tg() { return window.Telegram && window.Telegram.WebApp; }
+  function initTelegram() {
+    var app = tg();
+    if (!app) return;
+    try {
+      app.ready();
+      app.expand();
+      if (app.colorScheme) document.documentElement.setAttribute('data-theme', app.colorScheme);
+    } catch (e) { /* not inside Telegram */ }
+  }
+  function haptic(type) {
+    try { tg().HapticFeedback.notificationOccurred(type); } catch (e) { /* optional */ }
+  }
+  window.addEventListener('load', initTelegram);
+
+  // ---- Preferences (per viewer, optional) ----
+  function loadPref(key, fallback) {
+    try { return localStorage.getItem('pi.' + key) || fallback; } catch (e) { return fallback; }
+  }
+  function savePref(key, value) {
+    try { localStorage.setItem('pi.' + key, value); } catch (e) { /* storage blocked */ }
+  }
+
+  // ---- Server calls ----
+  function server(fn, onOk, onErr) {
+    if (window.google && google.script && google.script.run) {
+      google.script.run.withSuccessHandler(onOk).withFailureHandler(onErr)[fn](TOKEN);
+    } else if (window.__PREVIEW__) {
+      setTimeout(function () { onOk(window.__PREVIEW__[fn]()); }, 300);
+    } else {
+      onErr(new Error('Open this page from the Telegram bot.'));
+    }
+  }
+
+  function load() {
+    server('getMiniAppData', function (data) {
+      state.data = data;
+      render();
+    }, showError);
+  }
+
+  function refresh() {
+    if (state.refreshing) return;
+    state.refreshing = true;
+    renderRefreshButton();
+    server('refreshMiniAppData', function (data) {
+      state.refreshing = false;
+      state.data = data;
+      haptic('success');
+      render();
+    }, function (err) {
+      state.refreshing = false;
+      haptic('error');
+      renderRefreshButton();
+      showToastError(err);
+    });
+  }
+
+  // ---- Formatting ----
+  function currency() { return state.data.snapshot.baseCurrency; }
+  function fmtMoney(value, ccy, opts) {
+    if (value === null || value === undefined || isNaN(value)) return '—';
+    opts = opts || {};
+    var abs = Math.abs(value);
+    var digits = opts.compact ? 1 : (abs >= 100000 ? 0 : 2);
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency', currency: ccy || currency(),
+        notation: opts.compact ? 'compact' : 'standard',
+        minimumFractionDigits: opts.compact ? 0 : digits,
+        maximumFractionDigits: digits
+      }).format(value);
+    } catch (e) {
+      return (ccy || currency()) + ' ' + value.toFixed(digits);
+    }
+  }
+  function fmtSignedMoney(value, ccy) {
+    if (value === null || value === undefined || isNaN(value)) return '—';
+    return (value > 0 ? '+' : value < 0 ? '−' : '') + fmtMoney(Math.abs(value), ccy);
+  }
+  function fmtPct(value, digits) {
+    if (value === null || value === undefined || isNaN(value)) return '—';
+    var d = digits === undefined ? 2 : digits;
+    return (value > 0 ? '+' : value < 0 ? '−' : '') + Math.abs(value).toFixed(d) + '%';
+  }
+  function fmtWeight(w) { return (w * 100).toFixed(w < 0.1 ? 1 : 0) + '%'; }
+  function fmtQty(q) {
+    if (q === null || q === undefined) return '—';
+    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 8 }).format(q);
+  }
+  // Direction is carried by an arrow and sign, not by color alone.
+  function deltaHtml(value, text) {
+    if (!value) return '<span class="num muted">' + text + '</span>';
+    var cls = value > 0 ? 'up' : 'down';
+    var arrow = value > 0 ? '▲' : '▼';
+    return '<span class="num ' + cls + '"><span aria-hidden="true">' + arrow + '</span> ' + text + '</span>';
+  }
+  function ago(seconds) {
+    if (seconds < 90) return 'just now';
+    if (seconds < 3600) return Math.round(seconds / 60) + ' min ago';
+    if (seconds < 172800) return Math.round(seconds / 3600) + ' h ago';
+    return Math.round(seconds / 86400) + ' days ago';
+  }
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  // ---- Allocation groups: top N by value, the rest folded into "Other" ----
+  function groups() {
+    var raw = state.data.snapshot[DIMENSION.key] || [];
+    var top = raw.slice(0, raw.length > MAX_GROUPS + 1 ? MAX_GROUPS : raw.length);
+    var rest = raw.slice(top.length);
+    var list = top.map(function (g, i) {
+      return { name: g.name, names: [g.name], value: g.value, weight: g.weight, dayChange: g.dayChange,
+        dayChangePercent: g.dayChangePercent, count: g.count, color: 'var(' + SERIES[i] + ')' };
+    });
+    if (rest.length) {
+      var other = rest.reduce(function (acc, g) {
+        acc.value += g.value; acc.weight += g.weight; acc.dayChange += g.dayChange; acc.count += g.count;
+        acc.names.push(g.name);
+        return acc;
+      }, { name: 'Other', names: [], value: 0, weight: 0, dayChange: 0, count: 0, color: 'var(--other)' });
+      var prev = other.value - other.dayChange;
+      other.dayChangePercent = prev ? other.dayChange / prev * 100 : 0;
+      list.push(other);
+    }
+    return list;
+  }
+
+  // ---- Render ----
+  function render() {
+    var d = state.data;
+    var app = document.getElementById('app');
+    if (!d || !d.snapshot) {
+      app.innerHTML = '<section class="card"><p class="empty">No portfolio data yet. Add holdings to the Portfolio sheet, then tap refresh.</p>' +
+        '<div style="text-align:center"><button class="refresh" id="refresh">' + refreshIcon() + 'Refresh</button></div></section>';
+      document.getElementById('refresh').onclick = refresh;
+      return;
+    }
+    app.innerHTML = heroHtml() +
+      '<nav class="tabs">' + segHtml(VIEWS, state.view, 'data-view') + '</nav>' +
+      '<div id="view"></div>';
+    document.getElementById('refresh').onclick = refresh;
+    app.querySelectorAll('[data-view]').forEach(function (b) {
+      b.onclick = function () {
+        state.view = b.getAttribute('data-view');
+        savePref('view', state.view);
+        app.querySelectorAll('[data-view]').forEach(function (other) {
+          other.setAttribute('aria-pressed', String(other === b));
+        });
+        renderView();
+      };
+    });
+    renderView();
+  }
+
+  function renderView() {
+    var view = document.getElementById('view');
+    if (state.view === 'briefing') {
+      renderBriefing(view);
+      return;
+    }
+    view.innerHTML =
+      '<section class="card" id="history"></section>' +
+      '<section class="card" id="allocation"></section>' +
+      '<section class="card" id="holdings"></section>' +
+      '<p class="footnote">Values in ' + esc(currency()) + ' · converted at current FX rates · not financial advice</p>';
+    renderHistory();
+    renderAllocation();
+    renderHoldings();
+  }
+
+  // ---- Briefing (watchlist, macro, risks, opportunities from the last AI run) ----
+  function renderBriefing(view) {
+    var b = state.data.briefing;
+    if (!b) {
+      view.innerHTML = '<section class="card"><p class="empty">No briefing saved yet.<br>' +
+        'It appears here after the next weekday briefing, or send /briefing to the bot.</p></section>';
+      return;
+    }
+    var age = (Date.now() - Date.parse(b.generatedAt)) / 1000;
+    var html = '<p class="briefing-meta">Briefing' + (b.date ? ' for ' + esc(b.date) : '') +
+      ' · generated ' + ago(age) + (age > 36 * 3600 ? ' · <span class="down">may be out of date</span>' : '') + '</p>';
+
+    html += '<section class="card"><h2>Watchlist</h2>' + (b.watchList && b.watchList.length
+      ? b.watchList.map(watchItemHtml).join('')
+      : '<p class="empty">No tickers on the Watchlist sheet.</p>') + '</section>';
+
+    if (b.macro && b.macro.length) {
+      html += '<section class="card"><h2>Macro snapshot</h2>' + b.macro.map(function (group) {
+        return '<div class="macro-group"><h3>' + esc(group.title) + '</h3>' + bulletsHtml(group.items) + '</div>';
+      }).join('') + '</section>';
+    }
+    if (b.risks && b.risks.length) {
+      html += '<section class="card"><h2>Today’s risks</h2>' + bulletsHtml(b.risks) + '</section>';
+    }
+    if (b.opportunities && b.opportunities.length) {
+      html += '<section class="card"><h2>Today’s opportunities</h2>' + bulletsHtml(b.opportunities) + '</section>';
+    }
+    html += '<p class="footnote">AI-generated from news and market data · updates with each briefing · not financial advice</p>';
+    view.innerHTML = html;
+  }
+
+  function bulletsHtml(items) {
+    return '<ul class="bullets">' + items.map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>';
+  }
+
+  // Sentiment is shown as arrow + word, never color alone.
+  var SENTIMENTS = {
+    bullish: { cls: 'up', icon: '▲', label: 'Bullish' },
+    neutral: { cls: 'neutral', icon: '●', label: 'Neutral' },
+    bearish: { cls: 'down', icon: '▼', label: 'Bearish' }
+  };
+
+  function watchItemHtml(item) {
+    var s = SENTIMENTS[item.sentiment];
+    var badge = s ? '<span class="sentiment ' + s.cls + '"><span aria-hidden="true">' + s.icon + '</span> ' + s.label + '</span>' : '';
+    var sub = [item.companyName, item.market].filter(Boolean).join(' · ');
+    var headlines = (item.headlines || []).map(function (h) {
+      var title = esc(h.headline);
+      var link = h.url ? '<a href="' + esc(h.url) + '" target="_blank" rel="noopener noreferrer">' + title + '</a>' : title;
+      var meta = [h.source, h.datetime ? ago((Date.now() - Date.parse(h.datetime)) / 1000) : ''].filter(Boolean).join(' · ');
+      return '<li>' + link + (meta ? '<span class="muted">' + esc(meta) + '</span>' : '') + '</li>';
+    }).join('');
+    return '<div class="watch">' +
+      '<div class="row"><div style="min-width:0"><span class="ticker">' + esc(item.ticker) + '</span>' +
+        (sub ? '<span class="watch-name">' + esc(sub) + '</span>' : '') + '</div>' + badge + '</div>' +
+      (item.catalyst ? '<p>' + esc(item.catalyst) + '</p>' : '') +
+      (item.outlook ? '<p class="outlook">' + esc(item.outlook) + '</p>' : '') +
+      (headlines ? '<ul class="news">' + headlines + '</ul>' : (item.catalyst || item.outlook ? '' : '<p class="muted">' +
+        (item.newsCovered === false ? 'Company news isn’t available for this market.' : 'No news in the last day.') + '</p>')) +
+      '</div>';
+  }
+
+  function refreshIcon() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">' +
+      '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>';
+  }
+
+  function heroHtml() {
+    var s = state.data.snapshot, t = s.totals;
+    var markets = (s.byMarket || []).length;
+    var html = '<section class="card hero">' +
+      '<div class="row"><span class="hero-label">Total portfolio · ' + markets + ' market' + (markets === 1 ? '' : 's') + '</span>' +
+      '<button class="refresh" id="refresh">' + refreshIcon() + '<span>Refresh</span></button></div>' +
+      '<div class="hero-value">' + esc(fmtMoney(t.value)) + '</div>' +
+      '<div class="deltas">' +
+        '<span>' + deltaHtml(t.dayChange, esc(fmtSignedMoney(t.dayChange)) + ' (' + fmtPct(t.dayChangePercent) + ')') + '<span class="delta-label">today</span></span>';
+    if (t.unrealizedGain !== null && t.unrealizedGain !== undefined) {
+      html += '<span>' + deltaHtml(t.unrealizedGain, esc(fmtSignedMoney(t.unrealizedGain)) + ' (' + fmtPct(t.unrealizedGainPercent) + ')') + '<span class="delta-label">all time</span></span>';
+    }
+    html += '</div><div class="meta" id="meta">' + metaText() + '</div></section>';
+    return html;
+  }
+
+  function metaText() {
+    var s = state.data.snapshot, t = s.totals;
+    var text = t.holdings + ' holdings · updated ' + ago(state.data.ageSeconds);
+    if (t.unpriced) text += ' · <span class="down">' + t.unpriced + ' unpriced</span>';
+    return text;
+  }
+
+  function renderRefreshButton() {
+    var btn = document.getElementById('refresh');
+    if (!btn) return;
+    btn.disabled = state.refreshing;
+    btn.classList.toggle('spin', state.refreshing);
+    var label = btn.querySelector('span');
+    if (label) label.textContent = state.refreshing ? 'Updating…' : 'Refresh';
+  }
+
+  function segHtml(items, active, attr) {
+    return '<div class="seg" role="group">' + items.map(function (it) {
+      return '<button ' + attr + '="' + it.key + '" aria-pressed="' + (it.key === active) + '">' + esc(it.label || it.key) + '</button>';
+    }).join('') + '</div>';
+  }
+
+  // ---- History (line + area, crosshair tooltip) ----
+  function historyPoints() {
+    var pts = (state.data.history || []).slice();
+    var snap = state.data.snapshot;
+    // Make sure the live total is the last point even if today's row isn't written yet.
+    var today = snap.generatedAt.slice(0, 10);
+    if (!pts.length || pts[pts.length - 1].date < today) pts.push({ date: today, value: snap.totals.value });
+    else pts[pts.length - 1] = { date: pts[pts.length - 1].date, value: snap.totals.value };
+    var range = RANGES.filter(function (r) { return r.key === state.range; })[0] || RANGES[1];
+    if (range.days !== Infinity) {
+      var cutoff = new Date(Date.now() - range.days * 86400000).toISOString().slice(0, 10);
+      pts = pts.filter(function (p) { return p.date >= cutoff; });
+    }
+    return pts.map(function (p) { return { date: p.date, t: Date.parse(p.date + 'T00:00:00Z'), value: p.value }; });
+  }
+
+  function renderHistory() {
+    var el = document.getElementById('history');
+    var pts = historyPoints();
+    var head = '<div class="row"><h2>Value over time</h2>' + segHtml(RANGES, state.range, 'data-range') + '</div>';
+    if (pts.length < 2) {
+      el.innerHTML = head + '<p class="empty">History builds up one point per day.<br>Check back tomorrow for a trend line.</p>';
+      bindRange(el);
+      return;
+    }
+    var first = pts[0].value, last = pts[pts.length - 1].value;
+    var change = last - first;
+    el.innerHTML = head +
+      '<div class="chart-summary">' + deltaHtml(change, esc(fmtSignedMoney(change)) + ' (' + fmtPct(first ? change / first * 100 : 0) + ')') +
+      '<span class="delta-label">since ' + esc(fmtDate(pts[0].date)) + '</span></div>' +
+      '<div class="chart-wrap" id="chart"><div class="tooltip" id="tip"></div></div>';
+    bindRange(el);
+    drawLine(document.getElementById('chart'), pts);
+  }
+
+  function bindRange(el) {
+    el.querySelectorAll('[data-range]').forEach(function (b) {
+      b.onclick = function () { state.range = b.getAttribute('data-range'); savePref('range', state.range); renderHistory(); };
+    });
+  }
+
+  function fmtDate(iso, withYear) {
+    var d = new Date(iso + 'T00:00:00Z');
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined, timeZone: 'UTC' });
+  }
+
+  function niceTicks(min, max, count) {
+    var span = max - min || Math.abs(max) || 1;
+    var step = Math.pow(10, Math.floor(Math.log10(span / count)));
+    var err = span / count / step;
+    if (err >= 7.5) step *= 10; else if (err >= 3.5) step *= 5; else if (err >= 1.5) step *= 2;
+    var lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step, ticks = [];
+    for (var v = lo; v <= hi + step / 2; v += step) ticks.push(v);
+    return ticks;
+  }
+
+  function drawLine(wrap, pts) {
+    var W = wrap.clientWidth, H = wrap.clientHeight;
+    var padL = 48, padR = 6, padT = 10, padB = 22;
+    var values = pts.map(function (p) { return p.value; });
+    var ticks = niceTicks(Math.min.apply(null, values), Math.max.apply(null, values), 3);
+    var yMin = ticks[0], yMax = ticks[ticks.length - 1];
+    var t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+    function x(t) { return padL + (t1 === t0 ? 0.5 : (t - t0) / (t1 - t0)) * (W - padL - padR); }
+    function y(v) { return padT + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - padT - padB); }
+
+    var ns = 'http://www.w3.org/2000/svg';
+    var grid = ticks.map(function (v) {
+      return '<line x1="' + padL + '" x2="' + W + '" y1="' + y(v) + '" y2="' + y(v) + '" style="stroke:var(--grid)" stroke-width="1"/>' +
+        '<text x="' + (padL - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="11" style="fill:var(--muted)" class="num">' +
+        esc(fmtMoney(v, null, { compact: true })) + '</text>';
+    }).join('');
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(p.t).toFixed(1) + ' ' + y(p.value).toFixed(1); }).join(' ');
+    var area = line + ' L' + x(t1).toFixed(1) + ' ' + y(yMin) + ' L' + x(t0).toFixed(1) + ' ' + y(yMin) + ' Z';
+    var xLabels =
+      '<text x="' + padL + '" y="' + (H - 4) + '" font-size="11" style="fill:var(--muted)">' + esc(fmtDate(pts[0].date, true)) + '</text>' +
+      '<text x="' + W + '" y="' + (H - 4) + '" text-anchor="end" font-size="11" style="fill:var(--muted)">' + esc(fmtDate(pts[pts.length - 1].date, true)) + '</text>';
+
+    var svg = '<svg xmlns="' + ns + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Portfolio value from ' +
+      esc(fmtDate(pts[0].date, true)) + ' to ' + esc(fmtDate(pts[pts.length - 1].date, true)) + '">' +
+      '<defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1">' +
+      '<stop offset="0" style="stop-color:var(--s1)" stop-opacity="0.22"/><stop offset="1" style="stop-color:var(--s1)" stop-opacity="0"/></linearGradient></defs>' +
+      grid +
+      '<line x1="' + padL + '" x2="' + W + '" y1="' + y(yMin) + '" y2="' + y(yMin) + '" style="stroke:var(--axis)" stroke-width="1"/>' +
+      '<path d="' + area + '" fill="url(#fill)"/>' +
+      '<path d="' + line + '" fill="none" style="stroke:var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+      xLabels +
+      '<g id="cross" style="display:none"><line id="cross-line" y1="' + padT + '" y2="' + y(yMin) + '" style="stroke:var(--axis)" stroke-width="1"/>' +
+      '<circle id="cross-dot" r="4.5" style="fill:var(--s1);stroke:var(--surface)" stroke-width="2"/></g>' +
+      '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent" id="hit"/>' +
+      '</svg>';
+    wrap.insertAdjacentHTML('afterbegin', svg);
+
+    var tip = document.getElementById('tip');
+    var cross = wrap.querySelector('#cross');
+    var crossLine = wrap.querySelector('#cross-line');
+    var crossDot = wrap.querySelector('#cross-dot');
+    function show(evt) {
+      var rect = wrap.getBoundingClientRect();
+      var px = (evt.touches ? evt.touches[0].clientX : evt.clientX) - rect.left;
+      var best = pts[0], bestDist = Infinity;
+      pts.forEach(function (p) { var dd = Math.abs(x(p.t) - px); if (dd < bestDist) { bestDist = dd; best = p; } });
+      var cx = x(best.t), cy = y(best.value);
+      cross.style.display = '';
+      crossLine.setAttribute('x1', cx); crossLine.setAttribute('x2', cx);
+      crossDot.setAttribute('cx', cx); crossDot.setAttribute('cy', cy);
+      tip.innerHTML = '<b class="num">' + esc(fmtMoney(best.value)) + '</b><span class="muted">' + esc(fmtDate(best.date, true)) + '</span>';
+      tip.style.display = 'block';
+      var half = tip.offsetWidth / 2;
+      tip.style.left = Math.max(half, Math.min(W - half, cx)) + 'px';
+      tip.style.top = (cy > 60 ? cy - 52 : cy + 12) + 'px';
+    }
+    function hide() { cross.style.display = 'none'; tip.style.display = 'none'; }
+    var hit = wrap.querySelector('#hit');
+    hit.addEventListener('pointermove', show);
+    hit.addEventListener('pointerdown', show);
+    hit.addEventListener('pointerleave', hide);
+    hit.addEventListener('touchmove', show, { passive: true });
+    hit.addEventListener('touchend', hide);
+  }
+
+  // ---- Allocation (stacked bar + legend rows that filter the holdings) ----
+  function renderAllocation() {
+    var el = document.getElementById('allocation');
+    var gs = groups();
+    var bar = gs.map(function (g) {
+      return '<span style="flex:' + Math.max(g.weight, 0.004) + ';background:' + g.color + '" title="' + esc(g.name) + ' ' + fmtWeight(g.weight) + '"></span>';
+    }).join('');
+    var rows = gs.map(function (g, i) {
+      var pressed = state.filter && state.filter.name === g.name;
+      return '<button class="alloc-row" data-group="' + i + '" aria-pressed="' + !!pressed + '">' +
+        '<span class="swatch" style="background:' + g.color + '"></span>' +
+        '<span class="alloc-name">' + esc(g.name) + '<small>' + g.count + ' holding' + (g.count === 1 ? '' : 's') + '</small></span>' +
+        '<span class="alloc-value num">' + esc(fmtMoney(g.value)) + '<small>' + fmtWeight(g.weight) + '</small></span>' +
+        '<span class="alloc-change">' + deltaHtml(g.dayChangePercent, fmtPct(g.dayChangePercent)) + '</span>' +
+        '</button>';
+    }).join('');
+    el.innerHTML = '<div class="row"><h2>Allocation by sector</h2></div>' +
+      '<div class="stack" role="img" aria-label="' + esc(gs.map(function (g) { return g.name + ' ' + fmtWeight(g.weight); }).join(', ')) + '">' + bar + '</div>' +
+      rows;
+    el.querySelectorAll('[data-group]').forEach(function (b) {
+      b.onclick = function () {
+        var g = gs[Number(b.getAttribute('data-group'))];
+        state.filter = state.filter && state.filter.name === g.name ? null : { name: g.name, names: g.names, field: DIMENSION.field };
+        renderAllocation();
+        renderHoldings();
+      };
+    });
+  }
+
+  // ---- Holdings list ----
+  // Unrealised P/L in base currency; holdings without a cost sort last.
+  function plValue(h) {
+    return h.unrealizedGainBase === null || h.unrealizedGainBase === undefined ? -Infinity : h.unrealizedGainBase;
+  }
+
+  function renderHoldings() {
+    var el = document.getElementById('holdings');
+    var list = state.data.snapshot.holdings.slice();
+    var f = state.filter;
+    if (f) list = list.filter(function (h) { return f.names.indexOf(h[f.field] || 'Other') !== -1; });
+    var sorters = {
+      value: function (a, b) { return (b.valueBase || 0) - (a.valueBase || 0); },
+      today: function (a, b) { return (b.dailyChangePercent || 0) - (a.dailyChangePercent || 0); },
+      pl: function (a, b) { return plValue(b) - plValue(a); }
+    };
+    list.sort(sorters[state.sort] || sorters.value);
+
+    var head = '<div class="row"><h2>Holdings' + (f ? '' : ' · ' + list.length) + '</h2>' + segHtml(SORTS, state.sort, 'data-sort') + '</div>';
+    if (f) {
+      head += '<div style="margin-top:10px"><button class="filter-chip" id="clear-filter">' + esc(f.name) + ' · ' + list.length +
+        ' <span aria-hidden="true">✕</span><span class="sr-only">clear filter</span></button></div>';
+    }
+    var body = list.map(function (h) {
+      var unpriced = h.valueBase === null || h.valueBase === undefined;
+      var isCash = h.assetClass === 'Cash';
+      var hasPl = h.unrealizedGainBase !== null && h.unrealizedGainBase !== undefined;
+      var change = isCash ? '<span class="muted">' + fmtWeight(h.weight) + '</span>'
+        : state.sort === 'pl'
+          ? (hasPl ? deltaHtml(h.unrealizedGainBase, esc(fmtSignedMoney(h.unrealizedGainBase))) : '<span class="num muted">—</span>')
+          : deltaHtml(h.dailyChangePercent, fmtPct(h.dailyChangePercent));
+      var right = unpriced
+        ? '<div class="num muted">No price</div>'
+        : '<div class="num">' + esc(fmtMoney(h.valueBase)) + '</div><div class="change">' + change + '</div>';
+      var badge = h.assetClass && h.assetClass !== 'Stock' ? '<span class="badge">' + esc(h.assetClass) + '</span>' : '';
+      var details = [
+        ['Quantity', fmtQty(h.shares)],
+        ['Price', isCash ? '—' : fmtMoney(h.price, h.currency)],
+        ['Avg cost', h.averageCost ? fmtMoney(h.averageCost, h.currency) : '—'],
+        ['Value (' + h.currency + ')', fmtMoney(h.value, h.currency)],
+        ['Unrealised P/L', h.unrealizedGainBase === null || h.unrealizedGainBase === undefined ? '—' :
+          fmtSignedMoney(h.unrealizedGainBase) + ' (' + fmtPct(h.unrealizedGainPercent) + ')'],
+        ['Weight', fmtWeight(h.weight)],
+        ['Today', isCash ? '—' : fmtSignedMoney(h.dayChangeBase)],
+        ['Market', h.market + (h.sector ? ' · ' + h.sector : '')]
+      ].map(function (kv) { return '<div><dt>' + esc(kv[0]) + '</dt><dd class="num">' + esc(kv[1]) + '</dd></div>'; }).join('');
+      return '<div class="holding' + (state.open[h.ticker] ? ' open' : '') + '">' +
+        '<button class="holding-main" data-ticker="' + esc(h.ticker) + '" aria-expanded="' + !!state.open[h.ticker] + '">' +
+          '<div style="min-width:0"><div><span class="ticker">' + esc(h.ticker) + '</span>' + badge + '</div>' +
+          '<div class="holding-sub">' + esc(h.name) + ' · ' + esc(h.market) + '</div></div>' +
+          '<div class="holding-right">' + right + '</div>' +
+        '</button><dl class="details">' + details + '</dl></div>';
+    }).join('');
+    el.innerHTML = head + '<div style="margin-top:6px">' + (body || '<p class="empty">No holdings.</p>') + '</div>';
+
+    el.querySelectorAll('[data-sort]').forEach(function (b) {
+      b.onclick = function () { state.sort = b.getAttribute('data-sort'); savePref('sort', state.sort); renderHoldings(); };
+    });
+    el.querySelectorAll('[data-ticker]').forEach(function (b) {
+      b.onclick = function () {
+        var t = b.getAttribute('data-ticker');
+        state.open[t] = !state.open[t];
+        b.parentNode.classList.toggle('open', state.open[t]);
+        b.setAttribute('aria-expanded', String(state.open[t]));
+      };
+    });
+    var clear = document.getElementById('clear-filter');
+    if (clear) clear.onclick = function () { state.filter = null; renderAllocation(); renderHoldings(); };
+  }
+
+  // ---- Errors ----
+  function message(err) { return (err && err.message) || String(err || 'Something went wrong'); }
+  function showError(err) {
+    document.getElementById('app').innerHTML = '<section class="card"><p class="error">' + esc(message(err)) + '</p>' +
+      '<p class="muted" style="font-size:13px;margin:0">If this keeps happening, send /app to the bot for a fresh link.</p></section>';
+  }
+  function showToastError(err) {
+    var meta = document.getElementById('meta');
+    if (meta) meta.innerHTML = '<span class="error">Refresh failed: ' + esc(message(err)) + '</span>';
+  }
+
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { if (document.getElementById('history')) renderHistory(); }, 150);
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

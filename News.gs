@@ -27,9 +27,13 @@ const News = (() => {
     return rankAndFilter(articles, ticker, companyName).slice(0, Config.all().maxNewsPerTicker);
   }
 
+  // Finnhub's company-news endpoint only covers North American listings, and
+  // crypto/cash have no company news at all - asking anyway just fills the
+  // Logs sheet with 403s.
   function getNewsForTickers(items) {
     return items.reduce((result, item) => {
-      result[item.ticker] = getCompanyNews(item.ticker, item.companyName);
+      const eligible = item.isUsListing !== false && item.assetClass !== 'Cash' && item.assetClass !== 'Crypto';
+      result[item.ticker] = eligible ? getCompanyNews(item.ticker, item.companyName) : [];
       return result;
     }, {});
   }
@@ -138,22 +142,11 @@ const News = (() => {
 })();
 
 const FinnhubNewsProvider = (() => {
-  const BASE_URL = 'https://finnhub.io/api/v1';
-
-  function apiKey() {
-    return Config.requireValue('FINNHUB_API_KEY');
-  }
-
+  // Routed through FinnhubProvider.request so news calls share its rate-limit
+  // pacing. Previously news had its own unthrottled client, which could burst
+  // past the 60/minute cap straight after the quote fetches.
   function get(path, params) {
-    const query = Object.keys(params || {})
-      .concat('token')
-      .map((key) => {
-        const value = key === 'token' ? apiKey() : params[key];
-        return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-      })
-      .join('&');
-    AppLogger.incrementApi('Finnhub');
-    return Utils.fetchJson(`${BASE_URL}${path}?${query}`);
+    return FinnhubProvider.request(path, params);
   }
 
   function getCompanyNews(ticker) {
@@ -166,10 +159,14 @@ const FinnhubNewsProvider = (() => {
     });
   }
 
+  // The general feed is the same for every macro query - fetch it once per run
+  // and filter locally, instead of one (throttled) call per query.
+  let generalNews = null;
+
   function getGeneralNews(query) {
-    const news = get('/news', { category: 'general' });
+    if (!generalNews) generalNews = get('/news', { category: 'general' }) || [];
     const normalizedQuery = String(query || '').toLowerCase().split(' ').filter(Boolean);
-    return news.filter((article) => {
+    return generalNews.filter((article) => {
       const text = `${article.headline || ''} ${article.summary || ''}`.toLowerCase();
       return normalizedQuery.some((word) => text.indexOf(word) >= 0);
     });

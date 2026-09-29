@@ -22,21 +22,80 @@ const MarketData = (() => {
     return { quote, profile, metrics };
   }
 
-  function enrichHolding(holding) {
-    const ticker = holding.ticker;
-    const { quote, profile, metrics } = fetchTickerData(ticker);
-    const earnings = Utils.safeCall(`${ticker} earnings`, null, () => getProvider().getNextEarningsDate(ticker));
+  /**
+   * Prices and values one holding.
+   *
+   * options.full (default true) also pulls profile, metrics and the earnings
+   * date - what the briefing needs. The Mini App snapshot only needs a price,
+   * so it passes full:false and costs one call per holding instead of four.
+   */
+  function enrichHolding(holding, options) {
+    const full = !options || options.full !== false;
+    const item = holding.assetClass ? holding : Object.assign({}, holding, Markets.classify(holding));
+    const ticker = item.ticker;
+    const baseCurrency = Config.all().baseCurrency;
 
+    let quote = {};
+    let profile = {};
+    let metrics = {};
+    let earnings = null;
+    let priceSource = null;
+
+    if (item.assetClass === 'Cash') {
+      quote = { currentPrice: 1, dailyChangePercent: 0, currency: item.currency };
+      priceSource = 'cash';
+    } else if (item.manualPrice) {
+      quote = { currentPrice: item.manualPrice, dailyChangePercent: 0, currency: item.currency };
+      priceSource = 'manual';
+    } else if (item.isUsListing) {
+      if (full) {
+        const data = fetchTickerData(ticker);
+        quote = data.quote;
+        profile = data.profile;
+        metrics = data.metrics;
+        earnings = Utils.safeCall(`${ticker} earnings`, null, () => getProvider().getNextEarningsDate(ticker));
+      } else {
+        quote = getQuote(ticker);
+      }
+      priceSource = 'finnhub';
+      // Finnhub answers unknown symbols with zeros rather than an error; ETFs
+      // and funds on some plans do the same. Yahoo is the fallback.
+      if (!quote.currentPrice) {
+        quote = Utils.safeCall(`${ticker} yahoo quote`, {}, () => YahooProvider.getQuote(item.pricingSymbol));
+        priceSource = quote.currentPrice ? 'yahoo' : null;
+      }
+      quote.currency = quote.currency || 'USD';
+    } else {
+      quote = Utils.safeCall(`${ticker} yahoo quote`, {}, () => YahooProvider.getQuote(item.pricingSymbol));
+      priceSource = quote.currentPrice ? 'yahoo' : null;
+    }
+
+    // Trust the currency the feed reports over the one inferred from the
+    // ticker: it's the unit the price is actually in.
+    const currency = quote.currency || item.currency;
     const price = quote.currentPrice || null;
-    const positionValue = price && holding.shares ? price * holding.shares : null;
-    const costBasis = holding.shares && holding.averageCost ? holding.shares * holding.averageCost : null;
+    const dailyChangePercent = Number(quote.dailyChangePercent || 0);
+    const positionValue = price && item.shares ? price * item.shares : null;
+    const costBasis = item.shares && item.averageCost ? item.shares * item.averageCost : null;
     const unrealizedGain = positionValue !== null && costBasis ? positionValue - costBasis : null;
     const unrealizedGainPercent = unrealizedGain !== null && costBasis ? (unrealizedGain / costBasis) * 100 : null;
 
-    return Object.assign({}, holding, {
-      companyName: holding.companyName || profile.companyName || ticker,
+    const fxRate = FX.rate(currency, baseCurrency);
+    const positionValueBase = positionValue !== null && fxRate !== null ? positionValue * fxRate : null;
+    const costBasisBase = costBasis !== null && fxRate !== null ? costBasis * fxRate : null;
+    // Today's move in base currency, from the local-currency % change. (FX
+    // moves over the day are ignored - this is the asset's move, not the
+    // currency's.)
+    const dayChangeBase = positionValueBase !== null && dailyChangePercent
+      ? positionValueBase - positionValueBase / (1 + dailyChangePercent / 100)
+      : 0;
+
+    return Object.assign({}, item, {
+      companyName: item.companyName || profile.companyName || ticker,
+      currency,
       price,
-      dailyChangePercent: quote.dailyChangePercent,
+      priceSource,
+      dailyChangePercent,
       volume: quote.volume || metrics.volume,
       marketCap: profile.marketCap || metrics.marketCap,
       peRatio: metrics.peRatio,
@@ -45,14 +104,19 @@ const MarketData = (() => {
       averageVolume: metrics.averageVolume,
       earningsDate: earnings,
       positionValue,
+      costBasis,
       unrealizedGain,
       unrealizedGainPercent,
+      fxRate,
+      positionValueBase,
+      costBasisBase,
+      dayChangeBase,
       _marketData: { quote, profile, metrics }
     });
   }
 
-  function enrichAll(holdings) {
-    return holdings.map(enrichHolding);
+  function enrichAll(holdings, options) {
+    return holdings.map((holding) => enrichHolding(holding, options));
   }
 
   function getQuote(ticker) {
@@ -185,6 +249,7 @@ const FinnhubProvider = (() => {
   }
 
   return {
+    request: get,
     getQuote,
     getProfile,
     getMetrics,
