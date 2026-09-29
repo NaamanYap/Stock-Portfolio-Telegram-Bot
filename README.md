@@ -1,7 +1,7 @@
 # Portfolio Intelligence Bot
 
 Reads a Google Sheets portfolio, fetches market data and company news, asks
-Gemini for a daily briefing, and sends it to Telegram every weekday at 8 AM.
+Gemini for a daily briefing, and sends it to Telegram every weekday at 7 AM.
 It also serves a **Telegram Mini App** with your total portfolio value across
 every market (US, Singapore, Hong Kong, crypto, cash…) in one base currency,
 and answers commands like `/portfolio` in the chat.
@@ -35,7 +35,7 @@ Telegram bot. See [Where the recommendations went](#where-the-recommendations-we
 - Tells you in Telegram when a scheduled run fails.
 - Logs executions, errors, token usage, and API usage to a `Logs` sheet (capped
   at ~3,000 rows).
-- Installs weekday 8 AM triggers, plus an hourly re-pricing trigger.
+- Installs weekday 7 AM triggers, plus an hourly re-pricing trigger.
 
 ## Where the recommendations went
 
@@ -162,7 +162,7 @@ Created automatically:
 ## Public Entry Points
 
 - `installPortfolioIntelligenceBot()` — validates properties, seeds example
-  sheets if empty, installs weekday 8 AM triggers.
+  sheets if empty, installs weekday 7 AM triggers.
 - `runDailyPortfolioIntelligence()` — runs the briefing and sends it. Apps
   Script stops any execution at 6 minutes, so when a large portfolio won't
   fit, the run stops cleanly and resumes a minute later in a new execution
@@ -221,7 +221,7 @@ update once, so this is harmless, but `getWebhookInfo` may show a "302" error.
 ## Scheduling
 
 Run `installPortfolioIntelligenceBot` once. It installs five triggers, Monday
-to Friday at 8 AM in the manifest timezone (`appsscript.json`), plus one hourly
+to Friday at 7 AM in the manifest timezone (`appsscript.json`), plus one hourly
 `refreshPortfolioSnapshot` trigger. It removes existing ones first, so running
 it again never creates duplicates. The hourly trigger costs one quote call per
 holding.

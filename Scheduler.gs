@@ -4,29 +4,29 @@ const Scheduler = (() => {
     ScriptApp.newTrigger('runDailyPortfolioIntelligence')
       .timeBased()
       .onWeekDay(ScriptApp.WeekDay.MONDAY)
-      .atHour(8)
+      .atHour(7)
       .create();
     ScriptApp.newTrigger('runDailyPortfolioIntelligence')
       .timeBased()
       .onWeekDay(ScriptApp.WeekDay.TUESDAY)
-      .atHour(8)
+      .atHour(7)
       .create();
     ScriptApp.newTrigger('runDailyPortfolioIntelligence')
       .timeBased()
       .onWeekDay(ScriptApp.WeekDay.WEDNESDAY)
-      .atHour(8)
+      .atHour(7)
       .create();
     ScriptApp.newTrigger('runDailyPortfolioIntelligence')
       .timeBased()
       .onWeekDay(ScriptApp.WeekDay.THURSDAY)
-      .atHour(8)
+      .atHour(7)
       .create();
     ScriptApp.newTrigger('runDailyPortfolioIntelligence')
       .timeBased()
       .onWeekDay(ScriptApp.WeekDay.FRIDAY)
-      .atHour(8)
+      .atHour(7)
       .create();
-    AppLogger.info('Triggers installed', 'Weekday 8 AM triggers created.');
+    AppLogger.info('Triggers installed', 'Weekday 7 AM triggers created.');
   }
 
   // Hourly, every day: crypto trades at weekends and markets in other
