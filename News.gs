@@ -23,7 +23,7 @@ const News = (() => {
   ]);
 
   // Cached after ranking: a busy ticker's raw feed is too large to cache, and
-  // without this a ticker that is both held and watched is fetched twice.
+  // a briefing that resumes in a new execution would otherwise fetch it again.
   function getCompanyNews(ticker, companyName) {
     return Utils.safeCall(`${ticker} news`, [], () => Utils.cached(`news:company:${ticker}`, () => (
       rankAndFilter(FinnhubNewsProvider.getCompanyNews(ticker), ticker, companyName)

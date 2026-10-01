@@ -52,7 +52,6 @@ function runBriefing_(continuation) {
   try {
     Config.validate();
     const holdings = Portfolio.getHoldings();
-    const watchlist = Portfolio.getWatchlist();
 
     if (!holdings.length) {
       throw new Error('Portfolio sheet has no holdings.');
@@ -64,12 +63,11 @@ function runBriefing_(continuation) {
     // is free, and the Mini App opens on the same numbers the message shows.
     const snapshot = Snapshot.save(Snapshot.build(enrichedHoldings));
     const companyNews = News.getNewsForTickers(enrichedHoldings);
-    const watchlistNews = News.getNewsForTickers(watchlist);
     const macroNews = News.getMacroNews();
     const alerts = Alerts.buildAlerts(enrichedHoldings, companyNews);
 
     const reportInput = buildReportInput_(
-      enrichedHoldings, watchlist, companyNews, watchlistNews, macroNews, alerts, snapshot
+      enrichedHoldings, companyNews, macroNews, alerts, snapshot
     );
     Utils.setDeadline(deadline);
     const report = reconcileWithMarketData_(Gemini.generateDailyBriefing(reportInput), enrichedHoldings);
@@ -86,7 +84,6 @@ function runBriefing_(continuation) {
 
     AppLogger.success('Daily briefing sent to Telegram', {
       holdings: enrichedHoldings.length,
-      watchlist: watchlist.length,
       totalValue: Utils.round(snapshot.totals.value, 2),
       baseCurrency: snapshot.baseCurrency,
       continuations: continuation
@@ -191,7 +188,7 @@ function logResolvedConfig() {
 
 // Helpers below end in "_" so the web app can't invoke them via google.script.run.
 
-function buildReportInput_(enrichedHoldings, watchlist, companyNews, watchlistNews, macroNews, alerts, snapshot) {
+function buildReportInput_(enrichedHoldings, companyNews, macroNews, alerts, snapshot) {
   const holdings = enrichedHoldings.map((holding) => ({
     ticker: holding.ticker,
     companyName: holding.companyName,
@@ -220,14 +217,6 @@ function buildReportInput_(enrichedHoldings, watchlist, companyNews, watchlistNe
     generatedAt: new Date().toISOString(),
     holdings,
     portfolioStats: calculatePortfolioStats_(enrichedHoldings, snapshot),
-    watchlist: watchlist.map((item) => ({
-      ticker: item.ticker,
-      companyName: item.companyName,
-      market: item.market,
-      sector: item.sector,
-      notes: item.notes,
-      news: summarizeArticles_(watchlistNews[item.ticker] || [])
-    })),
     macroNews: summarizeArticles_(macroNews),
     requiredSections: [
       'Portfolio Summary',
@@ -236,8 +225,7 @@ function buildReportInput_(enrichedHoldings, watchlist, companyNews, watchlistNe
       'Macro Overview',
       "Today's Risks",
       "Today's Opportunities",
-      'Upcoming Earnings',
-      'Watch List'
+      'Upcoming Earnings'
     ]
   };
 }

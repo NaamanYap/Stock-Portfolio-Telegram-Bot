@@ -12,14 +12,14 @@ Telegram bot. See [Where the recommendations went](#where-the-recommendations-we
 
 ## Features
 
-- Reads holdings from a `Portfolio` sheet and tickers from a `Watchlist` sheet.
+- Reads holdings from a `Portfolio` sheet.
 - Retrieves quote, daily change, market cap, P/E, 52-week high/low, volume, and
   next earnings date.
 - Retrieves, deduplicates, and ranks recent company news.
 - Detects alerts for price moves, upcoming earnings, analyst/news events,
   dividends, SEC filing mentions, and unusual volume.
 - Generates an AI briefing: company updates, macro overview, risks,
-  opportunities, upcoming earnings, and watchlist notes.
+  opportunities, and upcoming earnings.
 - Sends it through your Telegram bot, headed by a portfolio summary (total
   value, today's change, split by market) computed from market data. Gemini
   writes the narrative only: price changes it reports are overwritten with the
@@ -116,6 +116,8 @@ The last four columns are optional and are added to an existing sheet by
   pence are converted to pounds automatically.
 
 ### Watchlist
+
+Not used by the briefing. Kept for the Deep Dive Screener (see below).
 
 | Ticker | Company Name | Sector | Notes |
 |---|---|---|---|

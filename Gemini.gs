@@ -102,7 +102,6 @@ const Gemini = (() => {
       '- outlook must NOT contain emojis. It will be prefixed by the script.',
       '- risks must sound like "Key Risks & Alerts: [Content]"',
 
-      'For each watchList item, include "Today\'s Catalyst: [Content]" for the catalyst. The outlook must strictly start with the emoji 🟢, 🟡, or 🔴 followed immediately by the text.',
       'For macroOverview, divide findings neatly by categories using clean markdown arrays.',
 
       'Do not claim certainty about causation; say "likely" or "may" when inferring why a stock moved.',
@@ -117,7 +116,6 @@ const Gemini = (() => {
       required: [
         'date',
         'companyUpdates',
-        'watchList',
         'macroOverview',
         'todaysRisks',
         'todaysOpportunities'
@@ -136,18 +134,6 @@ const Gemini = (() => {
               whyMoved: { type: 'STRING' },    
               outlook: { type: 'STRING' },     
               risks: { type: 'STRING' }        
-            }
-          }
-        },
-        watchList: {
-          type: 'ARRAY',
-          items: {
-            type: 'OBJECT',
-            required: ['ticker', 'catalyst', 'outlook'],
-            properties: {
-              ticker: { type: 'STRING' },
-              catalyst: { type: 'STRING' },   
-              outlook: { type: 'STRING' }     
             }
           }
         },
