@@ -102,8 +102,8 @@ const Telegram = (() => {
   }
 
   /**
-   * The chat message is just the numbers and alerts. The AI sections (movers,
-   * watchlist, macro, risks, opportunities) live in the Mini App's Briefing tab.
+   * The chat message is just the numbers and alerts. The AI sections (holding
+   * updates, macro, risks, opportunities) live in the Mini App's Briefing tab.
    */
   function renderText(report, dateLabel, context) {
     const ctx = context || {};

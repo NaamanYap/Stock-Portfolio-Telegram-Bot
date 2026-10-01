@@ -28,9 +28,10 @@ Telegram bot. See [Where the recommendations went](#where-the-recommendations-we
   one base currency (`BASE_CURRENCY`, default USD).
 - Telegram Mini App: total value, today's move, all-time P/L, value over time,
   allocation by market / asset class / currency, and per-holding details. A
-  Briefing tab shows the latest AI briefing: watchlist outlook and headlines,
-  macro snapshot, today's risks and opportunities. It updates each time a
-  briefing runs, not when you tap Refresh.
+  Briefing tab shows the latest AI briefing: why each holding moved, its
+  outlook, risks and headlines, macro snapshot, today's risks and
+  opportunities. It updates each time a briefing runs, not when you tap
+  Refresh.
 - Bot commands: `/portfolio`, `/markets`, `/top`, `/app`, `/refresh`, `/briefing`.
 - Tells you in Telegram when a scheduled run fails.
 - Logs executions, errors, token usage, and API usage to a `Logs` sheet (capped

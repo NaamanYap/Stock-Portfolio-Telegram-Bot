@@ -398,7 +398,7 @@
     renderHoldings();
   }
 
-  // ---- Briefing (watchlist, macro, risks, opportunities from the last AI run) ----
+  // ---- Briefing (holding updates, macro, risks, opportunities from the last AI run) ----
   function renderBriefing(view) {
     var b = state.data.briefing;
     if (!b) {
@@ -410,9 +410,12 @@
     var html = '<p class="briefing-meta">Briefing' + (b.date ? ' for ' + esc(b.date) : '') +
       ' · generated ' + ago(age) + (age > 36 * 3600 ? ' · <span class="down">may be out of date</span>' : '') + '</p>';
 
-    html += '<section class="card"><h2>Watchlist</h2>' + (b.watchList && b.watchList.length
-      ? b.watchList.map(watchItemHtml).join('')
-      : '<p class="empty">No tickers on the Watchlist sheet.</p>') + '</section>';
+    // Briefings saved before holdings were stored have no `holdings` field.
+    html += '<section class="card"><h2>Your holdings</h2>' + (!b.holdings
+      ? '<p class="empty">Holding updates appear after the next briefing.</p>'
+      : b.holdings.length
+        ? b.holdings.map(holdingItemHtml).join('')
+        : '<p class="empty">No holdings on the Portfolio sheet.</p>') + '</section>';
 
     if (b.macro && b.macro.length) {
       html += '<section class="card"><h2>Macro snapshot</h2>' + b.macro.map(function (group) {
@@ -433,16 +436,16 @@
     return '<ul class="bullets">' + items.map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>';
   }
 
-  // Sentiment is shown as arrow + word, never color alone.
-  var SENTIMENTS = {
-    bullish: { cls: 'up', icon: '▲', label: 'Bullish' },
-    neutral: { cls: 'neutral', icon: '●', label: 'Neutral' },
-    bearish: { cls: 'down', icon: '▼', label: 'Bearish' }
-  };
+  // Today's move is shown as arrow + signed number, never color alone.
+  function changeBadgeHtml(change) {
+    if (change === null || change === undefined) return '';
+    var cls = change > 0 ? 'up' : change < 0 ? 'down' : 'neutral';
+    var icon = change > 0 ? '▲' : change < 0 ? '▼' : '●';
+    return '<span class="sentiment ' + cls + '"><span aria-hidden="true">' + icon + '</span> ' + fmtPct(change) + '</span>';
+  }
 
-  function watchItemHtml(item) {
-    var s = SENTIMENTS[item.sentiment];
-    var badge = s ? '<span class="sentiment ' + s.cls + '"><span aria-hidden="true">' + s.icon + '</span> ' + s.label + '</span>' : '';
+  function holdingItemHtml(item) {
+    var badge = changeBadgeHtml(item.dailyChangePercent);
     var sub = [item.companyName, item.market].filter(Boolean).join(' · ');
     var headlines = (item.headlines || []).map(function (h) {
       var title = esc(h.headline);
@@ -453,9 +456,10 @@
     return '<div class="watch">' +
       '<div class="row"><div style="min-width:0"><span class="ticker">' + esc(item.ticker) + '</span>' +
         (sub ? '<span class="watch-name">' + esc(sub) + '</span>' : '') + '</div>' + badge + '</div>' +
-      (item.catalyst ? '<p>' + esc(item.catalyst) + '</p>' : '') +
+      (item.whyMoved ? '<p>' + esc(item.whyMoved) + '</p>' : '') +
       (item.outlook ? '<p class="outlook">' + esc(item.outlook) + '</p>' : '') +
-      (headlines ? '<ul class="news">' + headlines + '</ul>' : (item.catalyst || item.outlook ? '' : '<p class="muted">' +
+      (item.risks ? '<p class="outlook"><span class="muted">Risks · </span>' + esc(item.risks) + '</p>' : '') +
+      (headlines ? '<ul class="news">' + headlines + '</ul>' : (item.whyMoved || item.outlook ? '' : '<p class="muted">' +
         (item.newsCovered === false ? 'Company news isn’t available for this market.' : 'No news in the last day.') + '</p>')) +
       '</div>';
   }

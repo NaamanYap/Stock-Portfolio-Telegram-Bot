@@ -78,7 +78,7 @@ function runBriefing_(continuation) {
     Utils.setDeadline(null);
     // Saved before sending, so the Mini App's Briefing tab has it even if
     // Telegram delivery fails.
-    Utils.safeCall('Briefing save', null, () => Briefing.save(report, { watchlist, watchlistNews }));
+    Utils.safeCall('Briefing save', null, () => Briefing.save(report, { holdings: enrichedHoldings, companyNews }));
 
     Telegram.sendDailyBriefing(report, { snapshot, alerts });
     // Keeps the chat's Mini App menu button on a link that hasn't expired.

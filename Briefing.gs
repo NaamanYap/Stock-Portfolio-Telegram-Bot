@@ -2,8 +2,8 @@
  * The latest AI briefing, kept so the Mini App can show it.
  *
  * The daily run sends the briefing to Telegram as text; this stores the same
- * report (watchlist, macro, risks, opportunities) plus the watchlist headlines
- * it was written from. It only changes when a briefing runs (weekday mornings
+ * report (per-holding updates, macro, risks, opportunities) plus the headlines
+ * for each holding it was written from. It only changes when a briefing runs (weekday mornings
  * or /briefing) - the Mini App's refresh button re-prices holdings but doesn't
  * regenerate this, since that costs a Gemini call and a few minutes.
  */
@@ -22,48 +22,52 @@ const Briefing = (() => {
   ]);
 
   /**
-   * context: { watchlist, watchlistNews } - the sheet's watchlist rows and the
-   * ranked articles fetched for them.
+   * context: { holdings, companyNews } - the priced holdings and the ranked
+   * articles fetched for them. report.companyUpdates must already be
+   * reconciled with market data (see reconcileWithMarketData_ in Main.gs).
    */
   function save(report, context) {
     const ctx = context || {};
-    const watchlist = ctx.watchlist || [];
-    const news = ctx.watchlistNews || {};
+    const holdings = ctx.holdings || [];
+    const news = ctx.companyNews || {};
 
     const aiByTicker = {};
-    (report.watchList || []).forEach((item) => {
+    (report.companyUpdates || []).forEach((item) => {
       aiByTicker[Utils.normalizeTicker(item.ticker)] = item;
     });
 
-    // Every watchlist row appears, in sheet order, even ones the model skipped
-    // - their headlines are still worth seeing.
-    const watchItems = watchlist.map((item) => {
-      const ai = aiByTicker[item.ticker] || {};
-      const outlook = parseOutlook(ai.outlook);
-      return {
-        ticker: item.ticker,
-        companyName: item.companyName || '',
-        market: item.market || '',
-        catalyst: stripLabel(ai.catalyst, /^today'?s catalyst:\s*/i),
-        outlook: outlook.text,
-        sentiment: outlook.sentiment,
-        // Mirrors News.getNewsForTickers: only US listings get company news.
-        newsCovered: item.isUsListing !== false && item.assetClass !== 'Cash' && item.assetClass !== 'Crypto',
-        headlines: (news[item.ticker] || []).slice(0, MAX_HEADLINES_PER_TICKER).map((article) => ({
-          headline: article.headline || article.title || '',
-          source: article.source || '',
-          url: /^https?:\/\//i.test(article.url || '') ? article.url : '',
-          datetime: article.datetime ? new Date(article.datetime * 1000).toISOString() : null
-        }))
-      };
-    });
+    // Every holding except cash appears, largest position first, even ones the
+    // model skipped - their headlines are still worth seeing.
+    const holdingItems = holdings
+      .filter((h) => h.assetClass !== 'Cash')
+      .sort((a, b) => Number(b.positionValueBase || 0) - Number(a.positionValueBase || 0))
+      .map((h) => {
+        const ai = aiByTicker[h.ticker] || {};
+        return {
+          ticker: h.ticker,
+          companyName: h.companyName && h.companyName !== h.ticker ? h.companyName : '',
+          market: h.market || '',
+          dailyChangePercent: h.price ? Utils.round(h.dailyChangePercent, 2) : null,
+          whyMoved: stripLabel(ai.whyMoved, /^today'?s critical news:\s*/i),
+          outlook: stripLabel(ai.outlook, /^outlook:\s*/i),
+          risks: stripLabel(ai.risks, /^key risks\s*&\s*alerts:\s*/i),
+          // Mirrors News.getNewsForTickers: only US listings get company news.
+          newsCovered: h.isUsListing !== false && h.assetClass !== 'Crypto',
+          headlines: (news[h.ticker] || []).slice(0, MAX_HEADLINES_PER_TICKER).map((article) => ({
+            headline: article.headline || article.title || '',
+            source: article.source || '',
+            url: /^https?:\/\//i.test(article.url || '') ? article.url : '',
+            datetime: article.datetime ? new Date(article.datetime * 1000).toISOString() : null
+          }))
+        };
+      });
 
     const macro = report.macroOverview || {};
     return Utils.putChunked(PROPERTY_NAME, {
-      version: 1,
+      version: 2,
       generatedAt: new Date().toISOString(),
       date: report.date || '',
-      watchList: watchItems,
+      holdings: holdingItems,
       macro: MACRO_CATEGORIES
         .map((category) => ({ title: category.title, items: cleanList(macro[category.key]) }))
         .filter((category) => category.items.length),
@@ -74,15 +78,6 @@ const Briefing = (() => {
 
   function latest() {
     return Utils.getChunked(PROPERTY_NAME);
-  }
-
-  // The prompt asks for outlooks that start with 🟢 / 🟡 / 🔴. Turn that into a
-  // field the page can render with an icon and label, not just an emoji.
-  function parseOutlook(value) {
-    const text = String(value || '').trim();
-    const match = text.match(/^(🟢|🟡|🔴)\s*/u);
-    const sentiment = !match ? null : match[1] === '🟢' ? 'bullish' : match[1] === '🔴' ? 'bearish' : 'neutral';
-    return { sentiment, text: match ? text.slice(match[0].length) : text };
   }
 
   function stripLabel(value, pattern) {
