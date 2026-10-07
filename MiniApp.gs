@@ -124,12 +124,43 @@ const MiniApp = (() => {
     return payload(Snapshot.refresh(Config.all().snapshotMinRefreshSeconds));
   }
 
+  /**
+   * JSON for the Stock Finder dashboard, which shows this portfolio in its own
+   * Portfolio tab. Its server calls GET /exec?api=data|refresh&key=... with the
+   * DASHBOARD_API_KEY Script Property; the key never reaches a browser. Without
+   * that property set, the endpoint is off. ContentService can't set an HTTP
+   * status, so failures come back as { error }.
+   */
+  function api(e) {
+    const params = (e && e.parameter) || {};
+    const expected = Config.get('DASHBOARD_API_KEY');
+    let body;
+    if (!expected || !constantTimeEquals(String(params.key || ''), expected)) {
+      body = { error: 'Unauthorized: DASHBOARD_API_KEY is missing or does not match.' };
+    } else {
+      try {
+        if (params.api === 'data') {
+          body = getData(issueToken(1));
+        } else if (params.api === 'refresh') {
+          body = refreshData(issueToken(1));
+        } else {
+          body = { error: `Unknown api: ${params.api}` };
+        }
+      } catch (error) {
+        body = { error: error.message || String(error) };
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify(body))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   return {
     issueToken,
     isValidToken,
     isConfigured,
     link,
     render,
+    api,
     getData,
     refreshData
   };
@@ -140,6 +171,7 @@ const MiniApp = (() => {
 // "_", so the page-facing ones below check the token themselves.
 
 function doGet(e) {
+  if (e && e.parameter && e.parameter.api) return MiniApp.api(e);
   return MiniApp.render(e);
 }
 

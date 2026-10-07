@@ -78,6 +78,7 @@ Optional Script Properties:
 | `BASE_CURRENCY` | `USD` | Currency for totals, e.g. `SGD`. |
 | `WEBAPP_URL` | — | The web app's `/exec` URL. Needed for the Mini App and commands. |
 | `MINI_APP_LINK_DAYS` | `30` | How long a Mini App link stays valid. |
+| `DASHBOARD_API_KEY` | — | Shared secret that lets the Stock Finder dashboard read this portfolio (its Portfolio tab). Unset = off. |
 
 Use **different** keys here from the Deep Dive Screener. Sharing a Finnhub key
 across both defeats the separation.
@@ -216,6 +217,13 @@ the latest stored snapshot, written by the daily briefing, the hourly trigger,
 `/refresh`, or the page's refresh button (at most one re-price every 2 minutes).
 "Today" is each asset's own move in its local currency, converted at the
 current FX rate. Moves in the exchange rates themselves aren't counted in it.
+
+**Stock Finder dashboard.** The Stock Finder website shows this portfolio
+in its own Portfolio tab. Its server calls `/exec?api=data` (or `api=refresh`)
+with `key=<DASHBOARD_API_KEY>` and gets the same JSON the Mini App reads. Set
+the same random string as `DASHBOARD_API_KEY` here and `PORTFOLIO_API_KEY` on
+Stock Finder, plus `PORTFOLIO_API_URL=<the /exec URL>` there. Change the
+property to cut it off. The key only travels server to server.
 
 **Webhook note.** Apps Script answers every POST with a redirect, and Telegram
 may count that as a failed delivery and send it again. The bot handles each

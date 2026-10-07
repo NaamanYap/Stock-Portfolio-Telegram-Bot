@@ -181,7 +181,7 @@ function logResolvedConfig() {
   // sheet and Stackdriver, and Finnhub's key in particular travels as a plain
   // query parameter, so anything that prints it leaks a live credential.
   Logger.log('--- Secrets present? ---');
-  ['GEMINI_API_KEY', 'FINNHUB_API_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'].forEach((key) => {
+  ['GEMINI_API_KEY', 'FINNHUB_API_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'DASHBOARD_API_KEY'].forEach((key) => {
     Logger.log(`${key}: ${Config.get(key) ? 'set' : 'MISSING'}`);
   });
 }
