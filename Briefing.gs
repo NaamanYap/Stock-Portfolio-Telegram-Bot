@@ -9,7 +9,7 @@
  */
 const Briefing = (() => {
   const PROPERTY_NAME = 'BRIEFING';
-  const MAX_HEADLINES_PER_TICKER = 3;
+  const MAX_HEADLINES_PER_TICKER = 5;
 
   // Shared with Telegram.renderMacroSnapshot so both show the same sections.
   const MACRO_CATEGORIES = Object.freeze([
@@ -51,6 +51,8 @@ const Briefing = (() => {
           whyMoved: stripLabel(ai.whyMoved, /^today'?s critical news:\s*/i),
           outlook: stripLabel(ai.outlook, /^outlook:\s*/i),
           risks: stripLabel(ai.risks, /^key risks\s*&\s*alerts:\s*/i),
+          positioning: stripLabel(ai.positioning, /^positioning:\s*/i),
+          catalysts: stripLabel(ai.catalysts, /^catalysts:\s*/i),
           // Mirrors News.getNewsForTickers: only US listings get company news.
           newsCovered: h.isUsListing !== false && h.assetClass !== 'Crypto',
           headlines: (news[h.ticker] || []).slice(0, MAX_HEADLINES_PER_TICKER).map((article) => ({
@@ -67,6 +69,8 @@ const Briefing = (() => {
       version: 2,
       generatedAt: new Date().toISOString(),
       date: report.date || '',
+      summary: cleanList(report.portfolioSummary),
+      events: cleanList(report.upcomingEvents),
       holdings: holdingItems,
       macro: MACRO_CATEGORIES
         .map((category) => ({ title: category.title, items: cleanList(macro[category.key]) }))
